@@ -11,7 +11,7 @@
 1. **Management Web** สำหรับ Master Data, Dashboard, Report, PO, รับสินค้า, คลัง, การตั้งค่า และงานบริหาร
 2. **Withdrawal Web (Mobile UI Only)** สำหรับตรวจนับ สแกน และเบิกสินค้าผ่าน Mobile Web Browser บนโทรศัพท์มือถือเท่านั้น
 
-งานรับเข้าและพิมพ์ Label ทำบนคอมพิวเตอร์คลังที่ติดตั้ง Print Control เพื่อเชื่อมต่อกับ Label Printer
+งานรับเข้าและพิมพ์ Label ทำบนคอมพิวเตอร์คลังที่ติดตั้ง Print Control เพื่อเชื่อมต่อกับ Label Printer โดยทีมโครงการเป็นผู้กำหนด จัดหา ติดตั้ง และรับรอง Hardware ที่รองรับทั้งหมด
 
 ## 2. Technology Stack
 
@@ -20,7 +20,8 @@
 | Frontend | Next.js สำหรับ Management Web และ Withdrawal Web |
 | Backend API | NestJS เป็นตัวเลือกหลัก; คำว่า “Adunis” ตีความเบื้องต้นว่า AdonisJS และต้องยืนยันว่าจะใช้แทน NestJS หรือแยกเป็น Service ใด |
 | Database | PostgreSQL เป็นฐานข้อมูลกลาง |
-| Printing | Print Control บนคอมพิวเตอร์คลังและ Label Printer |
+| Scale Hardware | เครื่องชั่งและ Scale Connector ที่ทีมโครงการกำหนด/พัฒนา พร้อม Stable Weight, Tare, Gross และ Net Weight |
+| Printing | Print Control, Label Printer และวัสดุฉลากที่ทีมโครงการกำหนด/พัฒนา |
 | Client | Management: Computer/Notebook Browser; Withdrawal: Mobile Browser บน Smartphone เท่านั้น |
 | External Integration | ระบบจัดซื้อเดิม ระบบบัญชี/ERP และ OCR Provider ตามที่ยืนยันภายหลัง |
 
@@ -323,6 +324,8 @@ Permission Catalog ต้องได้รับการอัปเดตแ�
 
 ## 9. Label Printing
 
+ทีมโครงการเป็นผู้กำหนดรุ่นเครื่องพิมพ์ ขนาดฉลาก วัสดุฉลาก Driver/Protocol และ Supported OS พร้อมทดสอบการพิมพ์และการสแกนในสภาพแวดล้อมใช้งานจริง ลูกค้าไม่ต้องเป็นผู้เลือกรุ่น Hardware
+
 Flow:
 
 `Management Web → Print Control → Label Printer → Result Callback`
@@ -407,8 +410,8 @@ Audit Record ต้องมี Actor, Session, Branch, Warehouse, Action, Targe
 - User-specific Permission Override จำเป็นหรือใช้ Role เท่านั้น
 - Deep Link Policy เมื่อ `show_in_navigation = false`
 - Browser/OS Version ขั้นต่ำ
-- Print Control API/Protocol และ Supported OS
-- Label Printer/Scale รุ่นที่จะใช้
+- ทีมโครงการกำหนด Print Control API/Protocol และ Supported OS
+- ทีมโครงการล็อกและรับรองรุ่น Label Printer/Scale ที่ใช้กับระบบ
 - OCR Provider, Field, Accuracy และ Manual Review Flow
 - ERP/Accounting Target, Transport และ Mapping
 - Audit/Security Log Retention

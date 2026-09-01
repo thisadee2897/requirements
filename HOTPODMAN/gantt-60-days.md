@@ -76,8 +76,8 @@ gantt
 
 - Dashboard และ Report ตามรายการที่ยืนยัน
 - Master Data, Supplier, User, Role, Permission, Menu และ Setting
-- Purchase Order, Receiving, OCR และการเชื่อมเครื่องชั่ง
-- Lot, Package, Barcode/QR Code, Label และ Print Control
+- Purchase Order, Receiving, OCR รวมถึงการจัดหาและเชื่อมเครื่องชั่ง
+- Lot, Package, Barcode/QR Code รวมถึงการจัดหา Label Printer, วัสดุฉลาก และ Print Control
 - Location, Stock Balance, Stock Movement, Transfer, Claim และ Adjustment
 - Processing, Yield, Waste และ Return Remaining Stock
 - Audit Log และข้อมูลสำหรับระบบบัญชี/ERP
@@ -94,7 +94,7 @@ gantt
 
 1. ยืนยัน Requirement และขอบเขต Dashboard/Report ภายในวันที่ 10 ของโครงการ
 2. ระบบ PO เดิมมี API และเอกสารพร้อมให้ทีม Development ใช้งานตั้งแต่วันแรก
-3. ได้รับรุ่น เครื่องจริง Protocol/SDK ของเครื่องชั่งและเครื่องพิมพ์ Label ภายในสัปดาห์แรก
+3. ทีมโครงการล็อกรุ่น Hardware, Protocol, ขนาดฉลาก และผลทดสอบ Prototype ภายในสัปดาห์แรก
 4. Master Data ตัวอย่าง เช่น สินค้า หน่วย Supplier สาขา คลัง และ Location พร้อมภายใน 10 วัน
 5. ผู้มีอำนาจตัดสินใจตอบคำถามและอนุมัติงานได้ภายใน 1 วันทำการ
 6. มีผู้ใช้งานจริงเข้าร่วม Review และ UAT ตามรอบที่กำหนด
@@ -107,8 +107,8 @@ gantt
 | ความเสี่ยง | ผลกระทบ | แนวทางควบคุม |
 |---|---|---|
 | PO API ไม่พร้อมหรือข้อมูลไม่ครบ | งาน PO และ Receiving ล่าช้า | ใช้ Mock API ก่อนและกำหนด Cut-off สำหรับ Integration จริง |
-| เครื่องชั่งไม่มี Protocol/SDK | ไม่สามารถรับน้ำหนักอัตโนมัติ | ทดสอบอุปกรณ์จริงในสัปดาห์แรกและเตรียม Admin Override ที่มี Audit Log |
-| เครื่องพิมพ์หรือ Label ไม่ผ่านสภาพห้องเย็น | ต้องแก้ Template/Hardware | ทดสอบฉลากจริงก่อนจบครึ่งแรกของโครงการ |
+| Scale Connector หรือ Stable Weight ไม่ผ่าน Prototype | ไม่สามารถรับน้ำหนักอัตโนมัติ | ทีมโครงการล็อกรุ่นและทดสอบ Hardware จริงภายในสัปดาห์แรก พร้อมเตรียม Admin Override ที่มี Audit Log |
+| เครื่องพิมพ์หรือวัสดุฉลากไม่ผ่านสภาพห้องเย็น | ต้องเปลี่ยน Template/Hardware/วัสดุ | ทีมโครงการทดสอบการติดฉลากและการสแกนจริงก่อนจบครึ่งแรกของโครงการ |
 | Dashboard/Report เปลี่ยนระหว่างพัฒนา | กระทบ Backend และ UAT | ล็อก KPI, สูตร, คอลัมน์ และตัวอย่างผลลัพธ์ภายในวันที่ 10 |
 | UAT Feedback ล่าช้า | ไม่สามารถ Go-live วันที่ 60 | กำหนดผู้อนุมัติและรอบ UAT ล่วงหน้า |
 | เพิ่ม Feature นอกขอบเขต | Timeline เกิน 60 วัน | ใช้ Change Request และย้ายไป Phase ถัดไป |
