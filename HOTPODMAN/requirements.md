@@ -37,6 +37,7 @@
 14. ส่งข้อมูลไปยังระบบบัญชีหรือ ERP
 15. แสดงรายงานแยกตามสาขา
 16. รองรับผู้ใช้งานหลายภาษา ได้แก่ ไทย ลาว จีน และพม่า
+17. ให้ผู้ดูแลตั้งค่าระบบและเปิด–ปิด Menu/Action ได้อย่างละเอียดโดยไม่ต้อง Deploy ใหม่
 
 ## 3. ขอบเขตระบบ
 
@@ -62,6 +63,8 @@
 - รายงานจัดซื้อ สต็อก การใช้ ราคา และการเคลม
 - การส่งข้อมูลให้ระบบบัญชีหรือ ERP
 - การกำหนดสิทธิ์ผู้ใช้งานและบันทึก Audit Log
+- ระบบตั้งค่าแบบ Global/สาขา/คลัง พร้อม Effective Value และประวัติการแก้ไข
+- ระบบเปิด–ปิด Menu, Submenu, Route และ Action ราย Permission
 
 ### 3.2 รอยืนยันว่าอยู่ในขอบเขตหรือไม่
 
@@ -139,6 +142,36 @@
 - กำหนดหมวดเหตุผลการเคลมและการปรับสต็อก
 - ตั้งค่าภาษา การเชื่อมต่อ และเลขที่เอกสาร
 - ดูประวัติการทำรายการของทุกสาขาตามสิทธิ์
+
+### 5.7 รูปแบบการกำหนดสิทธิ์
+
+ระบบใช้แนวทาง Role-Based Access Control (RBAC) โดยอ้างอิงรูปแบบจากโครงการ Warehouse และเพิ่มการควบคุม Menu/Action แบบ Dynamic ดังนี้
+
+1. ผู้ใช้งานหนึ่งคนสามารถมีได้หลายบทบาท
+2. บทบาทหนึ่งรายการสามารถมีได้หลาย Permission
+3. Permission ใช้รหัสรูปแบบ `module.action` เช่น `receiving.confirm` หรือ `report.export`
+4. ผู้ใช้งานต้องถูกกำหนดสาขาและคลังที่มีสิทธิ์เข้าถึงแยกจาก Permission
+5. เมนูแต่ละรายการต้องกำหนด Permission ที่ใช้สำหรับเข้าหน้าได้
+6. Action แต่ละรายการ เช่น เพิ่ม แก้ไข อนุมัติ ยกเลิก พิมพ์ซ้ำ หรือส่งออก ต้องมี Permission แยกกัน
+7. Frontend ใช้ Permission เพื่อแสดง/ซ่อนเมนูและปุ่ม แต่ Backend API ต้องตรวจ Permission ซ้ำทุกครั้ง
+8. หากไม่มี Permission ที่ตรงกัน ระบบต้องปฏิเสธโดยอัตโนมัติ (Default Deny)
+9. Role และ Permission ที่ถูกปิดใช้งานต้องไม่มีผลกับ Session หรือคำขอใหม่
+10. การเปลี่ยนสิทธิ์ต้องทำให้ Permission Cache หรือ Session ที่เกี่ยวข้องถูก Refresh ภายในเวลาที่กำหนด
+
+ลำดับการตรวจสิทธิ์ของคำขอหนึ่งรายการ:
+
+```mermaid
+flowchart TD
+    A[ผู้ใช้งานเข้าสู่ระบบ] --> B{บัญชีและ Session ใช้งานได้หรือไม่}
+    B -- ไม่ --> X[ปฏิเสธการใช้งาน]
+    B -- ใช่ --> C{มีสิทธิ์สาขา/คลังปัจจุบันหรือไม่}
+    C -- ไม่ --> X
+    C -- ใช่ --> D{Module และ Menu เปิดใช้งานหรือไม่}
+    D -- ไม่ --> X
+    D -- ใช่ --> E{Role มี Permission ของหน้า/Action หรือไม่}
+    E -- ไม่ --> X
+    E -- ใช่ --> F[Backend ตรวจเงื่อนไขธุรกิจและดำเนินการ]
+```
 
 ## 6. กระบวนการทำงานหลัก
 
@@ -218,6 +251,59 @@ flowchart LR
 3. PostgreSQL ต้องเป็นแหล่งข้อมูลกลางชุดเดียวของทุกสาขา
 4. Print Control ต้องยืนยันผลการพิมพ์กลับมายังระบบ และระบบต้องบันทึกกรณีพิมพ์ไม่สำเร็จ
 5. API ต้องรองรับ Idempotency สำหรับรายการรับเข้า เบิก คืน และการเชื่อมต่อระบบภายนอก เพื่อป้องกันรายการซ้ำ
+
+### 6.3 โครงสร้าง PostgreSQL Schema เบื้องต้น
+
+แนะนำให้แยก Schema ตาม Domain เพื่อให้โครงสร้างใกล้เคียงแนวทางของระบบ Warehouse และลดการปะปนของตารางแต่ละงาน
+
+| Schema | ข้อมูลหลัก |
+|---|---|
+| `security` | Session, Authentication, Access Log และ Security Event |
+| `master_data` | บริษัท สาขา คลัง Location สินค้า Supplier ผู้ใช้ Role Permission Menu และ System Setting |
+| `purchasing` | PO รายการสั่งซื้อ ประวัติราคา และ Supplier Claim |
+| `receiving` | เอกสารรับเข้า รายการรับเข้า OCR Attachment Lot และ Print Job |
+| `inventory` | Stock Ledger ยอดคงเหลือ การย้าย การตรวจนับ การปรับยอด FIFO/FEFO |
+| `withdrawal` | คำขอเบิก การอนุมัติ การจ่ายสินค้า การรับสินค้า และการคืน |
+| `processing` | ใบงานแปรรูป วัตถุดิบต้นทาง ผลผลิต ของเสีย และ Yield |
+| `notification` | Notification Template, Event, Recipient และ Delivery Status |
+| `integration` | ERP Mapping, Outbox, Sync Job, Request/Response และ Retry Log |
+| `reporting` | View, Materialized View หรือข้อมูลสรุปสำหรับ Dashboard และ Report |
+
+โครงสร้าง Logical สำหรับระบบสิทธิ์และการตั้งค่า:
+
+```mermaid
+erDiagram
+    USER ||--o{ USER_ROLE : assigned
+    ROLE ||--o{ USER_ROLE : contains
+    ROLE ||--o{ ROLE_PERMISSION : grants
+    PERMISSION ||--o{ ROLE_PERMISSION : included
+    USER ||--o{ USER_BRANCH : accesses
+    BRANCH ||--o{ USER_BRANCH : scoped
+    USER ||--o{ USER_WAREHOUSE : accesses
+    WAREHOUSE ||--o{ USER_WAREHOUSE : scoped
+    MENU ||--o{ MENU_PERMISSION : requires
+    PERMISSION ||--o{ MENU_PERMISSION : controls
+    SETTING_DEFINITION ||--o{ SETTING_VALUE : stores
+    BRANCH ||--o{ SETTING_VALUE : overrides
+    WAREHOUSE ||--o{ SETTING_VALUE : overrides
+```
+
+ตาราง Logical ขั้นต่ำของระบบสิทธิ์:
+
+| ตาราง | ฟิลด์สำคัญ |
+|---|---|
+| `users` | รหัสผู้ใช้ สถานะ ภาษา สาขาหลัก และข้อมูลเข้าสู่ระบบ |
+| `roles` | `role_code`, ชื่อ, รายละเอียด, ลำดับ, `is_active`, `is_system_role` |
+| `permissions` | `permission_code`, `module_key`, `action_key`, ชื่อ, รายละเอียด, `is_active` |
+| `user_roles` | ผู้ใช้ บทบาท วันที่เริ่ม/สิ้นสุด และสถานะ |
+| `role_permissions` | บทบาท Permission และสถานะ |
+| `user_branches` | ผู้ใช้ สาขาที่เข้าถึงได้ และสาขาหลัก |
+| `user_warehouses` | ผู้ใช้ คลังที่เข้าถึงได้ |
+| `menus` | App, Section, Parent, Menu Code, Path, Icon, Sort Order, `is_enabled`, `show_in_navigation` |
+| `menu_permissions` | Menu, Permission, Access Mode แบบ ANY/ALL |
+| `setting_definitions` | Setting Key, Data Type, Default, Validation, Scope และข้อมูลอธิบาย |
+| `setting_values` | Setting Key, Scope Type, Scope ID, Value, Effective Date และ Version |
+| `audit_logs` | ผู้ดำเนินการ Action, Target, Before/After, สาขา, IP, Device และวันเวลา |
 
 ## 7. ความต้องการเชิงฟังก์ชัน
 
@@ -407,6 +493,135 @@ flowchart LR
 8. การสั่งพิมพ์ซ้ำต้องระบุเหตุผลและถูกบันทึกใน Audit Log
 9. หาก Print Control ไม่พร้อมใช้งาน ระบบต้องแจ้งผู้ใช้งานอย่างชัดเจนและไม่เปลี่ยนสถานะเป็นพิมพ์สำเร็จ
 
+### FR-19 ระบบตั้งค่าแบบละเอียด
+
+#### FR-19.1 หลักการของ Setting
+
+1. Management Web ต้องมีเมนู “ตั้งค่าระบบ” แยกตามหมวดและค้นหาด้วยชื่อหรือ Setting Key ได้
+2. Setting แต่ละรายการต้องมีรหัสไม่ซ้ำ ชื่อ คำอธิบาย ชนิดข้อมูล ค่าเริ่มต้น ขอบเขต และ Validation Rule
+3. Setting ต้องรองรับชนิดข้อมูลอย่างน้อย Boolean, Number, Decimal, Text, Select, Multi-select, Date, Time, JSON และ Secret
+4. Setting ต้องกำหนดขอบเขตได้อย่างน้อย Global, บริษัท, สาขา และคลัง
+5. สาขาหรือคลังสามารถ Override ค่ากลางได้เฉพาะ Setting ที่อนุญาต
+6. หน้าจอต้องแสดงค่าเริ่มต้น ค่าที่ Override และค่าที่มีผลจริง (Effective Value) แยกจากกัน
+7. ระบบต้องตรวจสอบรูปแบบ ช่วงค่า และ Dependency ก่อนบันทึก
+8. Setting ที่กระทบธุรกรรมต้องแสดงคำเตือนและสรุปผลกระทบก่อนยืนยัน
+9. Setting ที่เป็น Secret ต้องเข้ารหัส Mask ค่าเดิม และห้ามส่งค่าจริงกลับไปยัง Frontend หลังบันทึก
+10. การแก้ไข Setting ต้องบันทึก Version, Before/After, ผู้แก้ไข, วันเวลา, Scope และเหตุผล
+11. Setting ที่สำคัญต้องรองรับวันที่เริ่มมีผลและผู้อนุมัติก่อนใช้งาน
+12. ระบบต้องคืนค่า Default หรือยกเลิก Override ได้โดยไม่ลบประวัติ
+
+#### FR-19.2 หมวดการตั้งค่า
+
+| หมวด | ตัวอย่างค่าที่ต้องตั้งได้ |
+|---|---|
+| องค์กร | ชื่อบริษัท เขตเวลา สกุลเงิน รูปแบบวันที่ ภาษาเริ่มต้น |
+| สาขาและคลัง | สถานะสาขา คลังเริ่มต้น Location กักกัน Location ของเสีย และสิทธิ์ข้ามสาขา |
+| เอกสาร | Prefix, Running Number, รูปแบบเลขที่เอกสาร และการ Reset เลขเอกสาร |
+| PO | ขั้นตอนอนุมัติ วงเงินอนุมัติ อนุโลมรับเกิน PO และเงื่อนไขปิด PO |
+| รับสินค้า | บังคับ PO, บังคับ Lot, บังคับวันหมดอายุ, รับบางส่วน, รับเกิน, OCR และหลักฐาน |
+| Lot/อายุสินค้า | วิธีสร้าง Lot, อายุเริ่มต้น, จำนวนวันแจ้งเตือน และการกักกันสินค้าหมดอายุ |
+| FIFO/FEFO | กฎหยิบเริ่มต้น กฎแยกตามหมวดสินค้า และการอนุญาต Override Lot |
+| Label/Printing | Print Control, Printer, Template, ขนาด Label, จำนวนสำเนา และ Retry |
+| ตรวจนับ | รูปแบบ Blind Count, ผู้อนุมัติผลต่าง, Threshold จำนวน/มูลค่า และการ Freeze Stock |
+| เบิกสินค้า | ขั้นตอน Request/Approve/Issue/Receive, ผู้อนุมัติ, วงเงิน, ปริมาณ และเวลาคืน 24 ชั่วโมง |
+| แปรรูป/Yield | สูตรคำนวณ ค่า Yield เป้าหมาย Threshold ของเสีย และผู้อนุมัติกรณีผิดปกติ |
+| Claim | หมวดเหตุผล SLA ผู้รับผิดชอบ หลักฐานบังคับ และขั้นตอนปิด Claim |
+| Dashboard/Report | KPI เริ่มต้น ช่วงเวลา Default คลัง/สาขา และสิทธิ์ Export |
+| Notification | Event, ช่องทาง, Template, ผู้รับ, Severity, Quiet Hours และ Escalation |
+| Integration | ERP Endpoint, Mapping, Schedule, Timeout, Retry และสถานะเปิด/ปิด |
+| Security | Session Timeout, Password Policy, Login Attempt, Lockout และ Permission Cache TTL |
+| ภาษา | ภาษาที่เปิดใช้ คำแปล และภาษาเริ่มต้นของแต่ละสาขา |
+
+#### FR-19.3 ลำดับการหาค่าที่มีผลจริง
+
+ระบบต้องหาค่า Setting ตามลำดับความเฉพาะเจาะจง โดยใช้ค่าระดับล่างสุดที่เปิดใช้งาน:
+
+`Warehouse Override → Branch Override → Company/Global Value → System Default`
+
+หากค่า Override ไม่ผ่าน Validation หรือถูกปิดใช้งาน ระบบต้องถอยกลับไปใช้ค่าระดับบนและบันทึก Warning เพื่อให้ผู้ดูแลตรวจสอบ
+
+### FR-20 ระบบ Menu, Role และ Action Permission
+
+#### FR-20.1 จัดการ Role
+
+1. ระบบต้องเพิ่ม แก้ไข คัดลอก เปิด/ปิด และเรียงลำดับ Role ได้
+2. Role ต้องมีรหัส ชื่อไทย/อังกฤษ รายละเอียด สถานะ และประเภท System/Custom
+3. ผู้ดูแลต้องเลือก Permission ของ Role ผ่าน Permission Matrix ที่จัดกลุ่มตาม Module ได้
+4. Permission Matrix ต้องเลือกทั้งหมด/ยกเลิกทั้งหมดราย Module และค้นหา Permission ได้
+5. ผู้ใช้งานหนึ่งคนมีหลาย Role ได้ โดย Effective Permission เป็นผลรวมของ Permission จาก Role ที่ยังใช้งาน
+6. ระบบต้องแสดง Effective Permission ของผู้ใช้ พร้อมระบุว่าได้รับจาก Role ใด
+7. ผู้ดูแลต้องกำหนดสาขาและคลังที่ผู้ใช้เข้าถึงได้แยกจาก Role
+8. การปิด Role ต้องไม่ลบประวัติและต้องแสดงจำนวนผู้ใช้ที่ได้รับผลกระทบก่อนยืนยัน
+9. System Role เช่น OWNER ต้องป้องกันการเปลี่ยนรหัส ลบ หรือปิดจนไม่เหลือผู้ดูแลระบบ
+10. ระบบต้องมีอย่างน้อยหนึ่งบัญชีที่มีสิทธิ์จัดการ Role/Permission อยู่เสมอเพื่อป้องกัน Lockout
+
+#### FR-20.2 เปิด–ปิด Menu
+
+1. ผู้ดูแลต้องเปิด/ปิด Menu และ Submenu แยกกันได้
+2. Menu ต้องระบุว่าอยู่ใน Management Web หรือ Withdrawal Web
+3. Menu ต้องกำหนด Section, Parent, Path, Icon, Sort Order และคำอธิบายได้
+4. Menu ต้องแยกค่า `is_enabled` ออกจาก `show_in_navigation`
+5. `is_enabled = false` หมายถึงปิด Route และ Backend Capability ที่เกี่ยวข้องตาม Mapping
+6. `show_in_navigation = false` หมายถึงไม่แสดงในเมนู แต่ Route อาจยังเข้าได้หาก Menu เปิดและผู้ใช้มี Permission
+7. Menu ต้องกำหนด Required Permission ได้หนึ่งรายการหรือหลายรายการ
+8. กรณีหลาย Permission ต้องกำหนด Access Mode เป็น ANY หรือ ALL ได้
+9. หาก Parent ไม่มี Child ที่ผู้ใช้เข้าถึงได้ ระบบต้องซ่อน Parent โดยอัตโนมัติ
+10. การพิมพ์ URL โดยตรงต้องไม่ข้ามการตรวจ Menu, Permission, Branch และ Warehouse Scope
+11. เมื่อปิด Menu ที่มีงานค้าง ระบบต้องเตือนจำนวนงานค้างและผลกระทบก่อนยืนยัน
+12. การเปลี่ยน Menu ต้องมีผลกับ Navigation และ Route Guard โดยไม่ต้อง Deploy ระบบใหม่
+
+#### FR-20.3 เปิด–ปิด Action
+
+1. Action ทุกตัวที่เปลี่ยนข้อมูลหรือเปิดเผยข้อมูลสำคัญต้องมี Permission Code แยก
+2. ผู้ดูแลต้องเปิด/ปิด Permission ได้ทั้งระบบ และเลือกให้แต่ละ Role ได้
+3. Action ที่ผู้ใช้ไม่มีสิทธิ์ต้องถูกซ่อนหรือ Disable ตาม UX Rule ที่กำหนด
+4. หากแสดงเป็น Disabled ระบบต้องอธิบายว่าขาด Permission ใด โดยไม่เปิดเผยข้อมูลอ่อนไหว
+5. Backend API ต้องตรวจ Permission เดียวกับ Action ฝั่ง UI ทุกครั้ง
+6. การปิด Action ทั้งระบบต้องทำให้ API ปฏิเสธ Action นั้น แม้ผู้ใช้ยังมี Permission อยู่ใน Role
+7. Action สำคัญ เช่น Approve, Adjust, Cancel, Reprint, Export และ Retry Integration ต้องขอเหตุผลก่อนดำเนินการ
+8. Transaction ที่ยืนยันแล้วต้องใช้ Cancel/Reverse Permission แทน Delete Permission
+9. ระบบต้องแยกสิทธิ์ View, Manage และ Approve เพื่อรองรับหลัก Maker–Checker
+10. ผู้สร้างรายการต้องไม่สามารถอนุมัติรายการของตนเองเมื่อ Setting Maker–Checker เปิดใช้งาน
+
+#### FR-20.4 Permission Code ขั้นต่ำ
+
+| Module | Permission Code ตัวอย่าง | Action ที่ควบคุม |
+|---|---|---|
+| Dashboard | `dashboard.view` | ดู Dashboard |
+| Product | `product.view`, `product.manage` | ดู/จัดการสินค้าและวัตถุดิบ |
+| Supplier | `supplier.view`, `supplier.manage` | ดู/จัดการ Supplier |
+| Purchase Order | `purchase_order.view`, `purchase_order.create`, `purchase_order.update`, `purchase_order.approve`, `purchase_order.cancel` | ดู สร้าง แก้ไข อนุมัติ ยกเลิก PO |
+| Receiving | `receiving.view`, `receiving.create`, `receiving.update`, `receiving.confirm`, `receiving.cancel` | ดู รับเข้า แก้ไข ยืนยัน และยกเลิกรับเข้า |
+| OCR | `receiving.ocr_upload`, `receiving.ocr_confirm` | อัปโหลดและยืนยันผล OCR |
+| Claim | `claim.view`, `claim.create`, `claim.update`, `claim.close` | ดู เปิด แก้ไข และปิด Claim |
+| Lot | `lot.view`, `lot.create`, `lot.update` | ดู สร้าง และแก้ไข Lot |
+| Label | `label.print`, `label.reprint`, `label.template_manage` | พิมพ์ พิมพ์ซ้ำ และจัดการ Template |
+| Inventory | `inventory.view`, `inventory.transfer`, `inventory.adjust`, `inventory.count` | ดู โอนย้าย ปรับยอด และตรวจนับ |
+| Withdrawal | `withdrawal.view`, `withdrawal.request`, `withdrawal.approve`, `withdrawal.issue`, `withdrawal.receive`, `withdrawal.cancel` | ดู ขอเบิก อนุมัติ จ่าย รับ และยกเลิก |
+| Return | `withdrawal.return`, `withdrawal.return_approve` | คืนสินค้าและอนุมัติคืน |
+| Processing | `processing.view`, `processing.create`, `processing.confirm`, `processing.close` | ดู สร้าง ยืนยัน และปิดงานแปรรูป |
+| Report | `report.view`, `report.export` | ดูและส่งออกรายงาน |
+| Integration | `integration.view`, `integration.sync`, `integration.retry` | ดู ส่งข้อมูล และส่งซ้ำ |
+| User | `user.view`, `user.manage` | ดูและจัดการผู้ใช้ |
+| Role | `role.view`, `role.manage` | ดูและจัดการ Role/Permission |
+| Menu | `menu.view`, `menu.manage` | ดูและเปิด–ปิด Menu |
+| Setting | `settings.view`, `settings.manage`, `settings.approve` | ดู แก้ไข และอนุมัติ Setting |
+| Audit | `audit.view`, `audit.export` | ดูและส่งออก Audit Log |
+
+รายการ Permission จริงต้องจัดทำเป็น Permission Catalog และต้องเพิ่ม Test ทุกครั้งที่มีการเพิ่ม Menu, Page, Action หรือ API ใหม่
+
+### FR-21 Audit Log สำหรับ Setting และ Permission
+
+1. ระบบต้องบันทึก Audit Log เมื่อสร้าง แก้ไข เปิด/ปิด หรือยกเลิก User, Role, Permission, Menu และ Setting
+2. Audit Log ต้องมีผู้ดำเนินการ วันเวลา สาขา Session, IP Address, User Agent, Action, Target และเหตุผล
+3. ระบบต้องเก็บค่า Before/After ในรูปแบบที่ตรวจสอบความเปลี่ยนแปลงได้
+4. ค่า Secret ต้องไม่ถูกเก็บเป็นข้อความจริงใน Audit Log
+5. ผู้มีสิทธิ์ต้องค้นหาตามผู้ใช้ Module, Action, Target, สาขา และช่วงเวลาได้
+6. Audit Log ต้องแก้ไขหรือลบไม่ได้ผ่านหน้าจอใช้งานทั่วไป
+7. ระบบต้องส่งออก Audit Log ได้เฉพาะผู้ที่มี `audit.export`
+8. เหตุการณ์ความปลอดภัย เช่น Login Failed, Permission Denied, Lockout และการพยายามเข้า URL ที่ไม่มีสิทธิ์ต้องถูกบันทึก
+9. ระบบต้องกำหนดระยะเวลาเก็บ Audit Log และขั้นตอน Archive ได้
+
 ## 8. กฎทางธุรกิจเบื้องต้น
 
 1. ทุกการรับเข้าต้องอ้างอิง PO เว้นแต่ประเภทรายการที่ผู้ดูแลระบบอนุญาตเป็นกรณีพิเศษ
@@ -419,15 +634,29 @@ flowchart LR
 8. จำนวนหรือน้ำหนักต้องไม่เป็นค่าติดลบ และต้องใช้จำนวนตำแหน่งทศนิยมตามชนิดสินค้า
 9. การเปลี่ยนสถานะ Claim ต้องระบุผู้ดำเนินการและวันเวลา
 10. การแก้ไขข้อมูลสำคัญต้องถูกบันทึกใน Audit Log
+11. การซ่อนปุ่มหรือเมนูบน Frontend ไม่ถือเป็นการควบคุมสิทธิ์ หาก Backend ยังไม่ได้ตรวจ Permission
+12. Permission ที่ไม่รู้จัก ถูกปิดใช้งาน หรือไม่มี Mapping ต้องถูกปฏิเสธแบบ Default Deny
+13. ผู้ใช้ต้องมีทั้ง Permission และสิทธิ์สาขา/คลังจึงทำรายการใน Scope นั้นได้
+14. เมื่อผู้ใช้มีหลาย Role ให้รวม Permission ที่อนุญาตจาก Role ที่ Active ทั้งหมด
+15. การปิด Menu ไม่ควรยกเลิกธุรกรรมที่เสร็จสมบูรณ์แล้ว แต่ต้องกำหนดวิธีจัดการงานค้างก่อนปิด
+16. การแก้ไข Setting ต้องไม่เปลี่ยนผลของธุรกรรมย้อนหลัง เว้นแต่มี Requirement และรายการปรับปรุงเฉพาะ
+17. OWNER และ System Role ที่กำหนดต้องได้รับการป้องกันไม่ให้ระบบเหลือผู้ดูแลเป็นศูนย์
+18. การอนุมัติรายการสำคัญต้องรองรับ Maker–Checker ตาม Setting ของแต่ละ Module
 
 ## 9. ความต้องการที่ไม่ใช่ฟังก์ชัน
 
 ### 9.1 ความปลอดภัย
 
 - ผู้ใช้งานต้องเข้าสู่ระบบก่อนใช้งาน
-- ระบบต้องควบคุมสิทธิ์ตามบทบาท สาขา และประเภทการทำรายการ
+- ระบบต้องควบคุมสิทธิ์ตาม Role, Permission, Menu, Action, สาขา และคลัง
+- Backend ต้องตรวจ Permission ทุก Endpoint ที่อ่านข้อมูลสำคัญหรือเปลี่ยนแปลงข้อมูล
+- Route Guard ต้องปฏิเสธการเข้า Page โดยตรงเมื่อ Menu ปิดหรือผู้ใช้ไม่มีสิทธิ์
+- ระบบต้องใช้ Default Deny สำหรับ Page, Action และ API ที่ไม่มี Policy ชัดเจน
+- ระบบต้องป้องกัน Cross-branch/Cross-warehouse Access โดยไม่เชื่อ Tenant Scope จากค่าที่ Browser ส่งมาเพียงอย่างเดียว
 - ข้อมูลสำคัญต้องถูกส่งผ่านการเชื่อมต่อที่เข้ารหัส
 - ระบบต้องบันทึกการเข้าสู่ระบบ การอนุมัติ การยกเลิก และการแก้ไขข้อมูลสำคัญ
+- การเปลี่ยน Role, Permission, Menu และ Security Setting ต้องทำให้ Session/Permission Cache ถูก Refresh หรือยกเลิกตามนโยบาย
+- ต้องมี Automated Test สำหรับ Permission Matrix, Direct URL, API และ Branch/Warehouse Scope
 - Session ต้องหมดอายุเมื่อไม่มีการใช้งานตามเวลาที่กำหนด
 
 ### 9.2 ประสิทธิภาพและการใช้งาน
@@ -465,6 +694,16 @@ flowchart LR
 15. สามารถส่งข้อมูลไปยังระบบบัญชีหรือ ERP และตรวจสอบผลการส่งได้
 16. ผู้ใช้งานแต่ละบทบาทต้องเห็นและทำรายการได้เฉพาะตามสิทธิ์
 17. หน้าจอหลักต้องแสดงผลในภาษาไทย ลาว จีน และพม่าได้ตามขอบเขตคำแปลที่ได้รับอนุมัติ
+18. ผู้ดูแลสามารถสร้าง Role และเลือก Permission ราย Module/Action ผ่าน Permission Matrix ได้
+19. ผู้ดูแลสามารถเปิด–ปิด Menu/Submenu และกำหนดการแสดงใน Navigation แยกจากการเปิด Route ได้
+20. เมื่อปิด Menu ระบบต้องซ่อนจาก Navigation และปฏิเสธ Direct URL ตามสถานะที่ตั้งไว้
+21. เมื่อปิด Action ระบบต้องซ่อน/Disable ปุ่มและ Backend API ต้องปฏิเสธคำขอเดียวกัน
+22. ผู้ใช้ที่ไม่มีสิทธิ์สาขาหรือคลังต้องไม่เห็นและไม่สามารถเรียกข้อมูลของ Scope นั้นผ่าน API ได้
+23. ผู้ดูแลสามารถดู Effective Permission ของผู้ใช้และที่มาจากแต่ละ Role ได้
+24. ระบบต้องป้องกันไม่ให้ปิดหรือลบ OWNER คนสุดท้ายจนไม่สามารถบริหารสิทธิ์ได้
+25. ผู้ดูแลสามารถกำหนด Setting ระดับ Global และ Override ระดับสาขา/คลัง พร้อมดู Effective Value ได้
+26. การเปลี่ยน Setting, Menu, Role และ Permission ต้องปรากฏใน Audit Log พร้อม Before/After
+27. การเปลี่ยน Permission ต้องมีผลกับ Session ตามเวลาหรือวิธี Refresh ที่กำหนด โดยไม่ต้อง Deploy ระบบใหม่
 
 ## 11. ข้อมูลที่ต้องยืนยันเพิ่มเติม
 
@@ -509,6 +748,19 @@ flowchart LR
 - ต้องเก็บไฟล์เอกสารนานเท่าใด
 - ต้องมีขั้นตอนผู้ตรวจสอบคนที่สองก่อนยืนยันยอดหรือไม่
 
+### 11.6 Setting และ Permission
+
+- Management Web ต้องรองรับหน้าจอขนาด Tablet เพิ่มเติมหรือไม่
+- การไม่มี Permission ควรซ่อน Action หรือแสดง Disabled พร้อมคำอธิบายในแต่ละกรณี
+- Menu ที่ `show_in_navigation = false` แต่ `is_enabled = true` อนุญาตให้เข้าผ่าน Deep Link หรือไม่
+- Menu ที่มีหลาย Permission ต้องใช้ ANY หรือ ALL เป็นค่าเริ่มต้น
+- ต้องมี User-specific Permission Override นอกเหนือจาก Role หรือใช้ Role เท่านั้น
+- ต้องรองรับ Role Template กลางและคัดลอกไปแต่ละสาขาหรือไม่
+- การเปลี่ยนสิทธิ์ต้องมีผลทันที บังคับ Logout หรือมีผลเมื่อ Session Refresh
+- Setting ใดต้องมี Approval ก่อนเริ่มใช้งาน และต้องมี Maker–Checker หรือไม่
+- ระยะเวลาจัดเก็บ Audit Log และ Security Log กี่ปี
+- ต้องแยกผู้ดูแล Menu/Permission ออกจากผู้ดูแล Setting ทั่วไปหรือไม่
+
 ## 12. สมมติฐานของเอกสารฉบับร่าง
 
 - ระบบเป็น Web Application และไม่ต้องติดตั้งแอปพลิเคชันหลักบนอุปกรณ์ผู้ใช้งาน
@@ -519,6 +771,7 @@ flowchart LR
 - คอมพิวเตอร์คลังต้องติดตั้ง Print Control เพื่อเชื่อม Web Application กับ Label Printer
 - สินค้าหนึ่งรายการอาจมีหลายหน่วย เช่น กิโลกรัม แพ็ก และชิ้น
 - ทุกสาขาใช้ฐานข้อมูลกลางและแยกการเข้าถึงด้วยสิทธิ์
+- ระบบใช้ RBAC แบบ User → Role → Permission ร่วมกับ Branch/Warehouse Scope และ Dynamic Menu/Action Policy
 - OCR เป็นเครื่องมือช่วยกรอกข้อมูล ผู้ใช้งานยังต้องตรวจสอบก่อนยืนยัน
 - รายละเอียดฟังก์ชัน POS หน้าร้านและรูปแบบการเชื่อม ERP จะเพิ่มหลังได้รับข้อมูลยืนยัน
 
