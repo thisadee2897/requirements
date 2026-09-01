@@ -8,7 +8,8 @@ Repository สำหรับรวบรวมเอกสาร Requirement �
 
 เอกสาร Requirement ระบบ Web สำหรับ Dashboard, Report, รับเข้า, เบิก และบริหารคลังสินค้าของ Hot Pod Man
 
-- [Requirements](./HOTPODMAN/requirements.md)
+- [Business Requirements — สำหรับผู้บริหาร](./HOTPODMAN/requirements.md)
+- [Technical Specification — สำหรับทีม Development](./HOTPODMAN/technical.md)
 
 ### [TRCloud_SUNFORD](./TRCloud_SUNFORD/)
 
