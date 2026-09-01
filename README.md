@@ -6,7 +6,7 @@ Repository สำหรับรวบรวมเอกสาร Requirement �
 
 ### [HOTPODMAN](./HOTPODMAN/)
 
-เอกสาร Requirement ระบบ POS และระบบบริหารจัดซื้อ/คลังสินค้าสำหรับธุรกิจร้านอาหาร Hotpotman
+เอกสาร Requirement ระบบ Web สำหรับ Dashboard, Report, รับเข้า, เบิก และบริหารคลังสินค้าของ Hot Pod Man
 
 - [Requirements](./HOTPODMAN/requirements.md)
 
