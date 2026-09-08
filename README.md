@@ -15,5 +15,6 @@ Repository สำหรับรวบรวมเอกสาร Requirement �
 
 เอกสาร Requirement สำหรับโครงการเชื่อมต่อ TRCloud ของ SUNFORD
 
-- [Full Application — พัฒนา Android App และ Integration ใหม่ทั้งหมด](./TRCloud_SUNFORD/requirements_new_app_full.md)
+- [AppWeighing — ขอบเขต Android App และ Integration ใหม่ทั้งหมด](./TRCloud_SUNFORD/requirements_new_app_full.md)
+- [AppWeighing — แผนพัฒนา 15 วัน + TRCloud API Contract v1](./TRCloud_SUNFORD/development_plan_full_app_15_days.md)
 - [WeWeigh2 + Module Yield — ใช้ WeWeigh2 เดิม เพิ่ม Export และแอป Yield](./TRCloud_SUNFORD/req_weweigh2+moduleYield.md)

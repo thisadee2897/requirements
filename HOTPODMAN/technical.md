@@ -18,17 +18,21 @@
 | Layer | Technology/Responsibility |
 |---|---|
 | Frontend | Next.js สำหรับ Management Web และ Withdrawal Web |
-| Backend API | NestJS เป็นตัวเลือกหลัก; คำว่า “Adunis” ตีความเบื้องต้นว่า AdonisJS และต้องยืนยันว่าจะใช้แทน NestJS หรือแยกเป็น Service ใด |
-| Database | PostgreSQL เป็นฐานข้อมูลกลาง |
+| Backend API | NestJS เป็น Backend หลักของระบบ; AdonisJS ไม่รวมใน Technical Baseline เว้นแต่มี Change Request |
+| Database | PostgreSQL Database ชื่อ `hotpodman_inventory` แยกจาก ERP |
+| Data Access | TypeORM สำหรับ Transaction/Migration และใช้ Raw SQL/Materialized View สำหรับ Reporting; ห้าม Frontend เชื่อม Database โดยตรง |
 | Scale Hardware | เครื่องชั่งและ Scale Connector ที่ทีมโครงการกำหนด/พัฒนา พร้อม Stable Weight, Tare, Gross และ Net Weight |
-| Printing | Print Control, Label Printer และวัสดุฉลากที่ทีมโครงการกำหนด/พัฒนา |
+| Device Agent | Local Service บนคอมพิวเตอร์คลังสำหรับเชื่อมเครื่องชั่งและควบคุมงานพิมพ์ |
+| Printing | Print Control, Thermal-transfer Label Printer และวัสดุฉลากที่ทีมโครงการกำหนด/พัฒนา |
 | Client | Management: Computer/Notebook Browser; Withdrawal: Mobile Browser บน Smartphone เท่านั้น |
-| External Integration | ระบบจัดซื้อเดิม ระบบบัญชี/ERP และ OCR Provider ตามที่ยืนยันภายหลัง |
+| External Integration | ระบบจัดซื้อเดิม ระบบบัญชี/ERP และ OCR ผ่าน Adapter/API |
 
 หลักการทางเทคนิค:
 
 - Frontend ต้องเรียกข้อมูลผ่าน Backend API และห้ามเชื่อม PostgreSQL โดยตรง
 - Backend เป็นผู้ควบคุม Business Rule, Permission, Scope และ Transaction
+- ระบบ Hot Pod Man เป็นเจ้าของ Operational Stock Ledger ส่วน ERP เป็นเจ้าของ PO ที่อนุมัติและข้อมูลบัญชี
+- ห้าม Application หรือทีม Hot Pod Man เขียนตรงลง Business Table ของ ERP
 - API ที่สร้างหรือเปลี่ยนธุรกรรมต้องรองรับ Idempotency
 - Transaction สต็อกต้องทำแบบ Atomic และตรวจสอบย้อนหลังได้
 - ห้ามเชื่อ Branch/Warehouse/User Scope จากค่าที่ Browser ส่งมาเพียงอย่างเดียว
@@ -43,10 +47,15 @@ flowchart LR
     WB --> WW[Next.js Withdrawal Web]
     MW --> API[Backend REST API]
     WW --> API
-    API --> DB[(PostgreSQL)]
-    API --> EXT[Purchasing / Accounting / ERP / OCR]
-    MW --> PC[Print Control]
-    PC --> LP[Label Printer]
+    API --> DB[(hotpodman_inventory PostgreSQL)]
+    API --> IQ[Integration Inbox/Outbox]
+    IQ <--> ERPAPI[ERP/Purchasing API]
+    ERPAPI --> ERPDB[(ERP Database)]
+    API --> OCR[OCR Provider]
+    MW <--> DA[Device Agent / Print Control]
+    DA <--> SC[Digital Scale]
+    DA --> LP[Label Printer]
+    DA --> API
 ```
 
 ### 3.1 Management Web
@@ -63,6 +72,26 @@ flowchart LR
 - ต้องรองรับการเปิดกล้องเพื่อสแกน Barcode/QR Code เมื่ออุปกรณ์และ Browser อนุญาต
 - UI ต้องเหมาะกับการใช้งานมือเดียวและลดจำนวนขั้นตอนระหว่างสแกนกับยืนยันรายการ
 
+### 3.3 Source of Truth
+
+| Domain | Source of Truth | หมายเหตุ |
+|---|---|---|
+| Approved PO และ PO Line | ERP/ระบบจัดซื้อ | Hot Pod Man เก็บสำเนาพร้อม `external_id` และ `synced_at` |
+| Product/Supplier/Branch/Unit Code | ERP หรือ Master Data ที่ได้รับอนุมัติ | เก็บ Mapping และ Version ใน Hot Pod Man |
+| Receiving, Lot, Package และ Location | Hot Pod Man | ERP ไม่แก้ไขข้อมูลปฏิบัติการโดยตรง |
+| Stock Ledger, Count, Withdrawal, Return และ Yield | Hot Pod Man | เป็น Operational Inventory Source of Truth |
+| Accounting Posting และ Financial Document | ERP/ระบบบัญชี | รับข้อมูลที่ยืนยันแล้วจาก Integration Outbox |
+
+### 3.4 Hardware and Device Agent
+
+- ทีมโครงการเป็นผู้เลือกรุ่น จัดหา ติดตั้ง และรับรองเครื่องชั่งกับ Label Printer
+- Device Agent ใช้ Windows 11 64-bit เป็น Baseline และทำงานเป็น Local Service
+- เครื่องชั่งเชื่อมผ่าน USB Serial หรือ Network ตามรุ่นที่ทีมโครงการรับรอง ไม่ใช้ Bluetooth เป็นช่องทางหลัก
+- Device Agent ต้องอ่าน Stable Weight, Gross, Tare, Net, Unit, Device ID และ Timestamp
+- ทุก Device ต้องมี Credential แยกกัน ส่ง Heartbeat และบันทึก Raw Device Data สำหรับตรวจสอบย้อนหลัง
+- Browser ติดต่อ Device Agent ผ่าน Local Authenticated Channel และ Backend ต้องตรวจ Device/User/Branch ก่อน Commit Transaction
+- หาก Device ไม่พร้อม ระบบต้อง Block งานปกติ; Admin Override ใช้ได้เฉพาะผู้มีสิทธิ์พร้อมเหตุผลและ Audit Log
+
 ## 4. PostgreSQL Schema
 
 แนะนำให้แยก Schema ตาม Domain ดังนี้
@@ -73,14 +102,19 @@ flowchart LR
 | `master_data` | Company, Branch, Warehouse, Location, Product, Supplier, User, Role, Permission, Menu และ Setting |
 | `purchasing` | PO, PO Line, Price History และ Supplier Claim |
 | `receiving` | Receipt, Receipt Line, OCR Attachment, Lot และ Print Job |
-| `inventory` | Stock Ledger, Balance, Transfer, Count, Adjustment และ FIFO/FEFO |
-| `withdrawal` | Request, Approval, Issue, Receive, Return และ Cancel |
-| `processing` | Processing Job, Input Lot, Output Lot, Waste และ Yield |
+| `inventory` | Stock Ledger, Balance, Transfer, Count, Adjustment, Return และ FIFO/FEFO |
+| `withdrawal` | Scan Session, Request, Approval, Issue และ Cancel |
+| `processing` | Processing Job, Input Lot, Output Lot, Waste, Yield และ Remaining Stock Return |
 | `notification` | Event, Template, Recipient และ Delivery Status |
-| `integration` | Mapping, Outbox, Sync Job, Request/Response และ Retry Log |
+| `integration` | Mapping, Inbox, Outbox, Idempotency Key, Sync Job, Request/Response, Retry และ Dead-letter Log |
 | `reporting` | View, Materialized View และ Aggregate สำหรับ Dashboard/Report |
 
 ไม่ควรเก็บ Business Table ทั้งหมดไว้ใน `public` Schema โดยไม่มี Boundary ชัดเจน
+
+- Database Owner แยกจาก Runtime User และ Migration User
+- Migration ทุกชุดต้องอยู่ใน Version Control และผ่าน CI ก่อน Deploy
+- Runtime User ใช้ Least Privilege และไม่มีสิทธิ์แก้ Schema
+- ERP Credential, OCR Key และ Device Secret ต้องเก็บใน Secret Store/Encrypted Setting
 
 ## 5. Core Data Model
 
@@ -194,6 +228,24 @@ Setting แต่ละรายการต้องมี:
 - ต้องเก็บ Before/After, Version, Actor, Scope, Reason และ Timestamp
 - ต้องรองรับ Reset to Default และ Remove Override โดยไม่ลบ History
 
+### 6.5 Baseline Setting Values
+
+| Setting Key | ค่าเริ่มต้น |
+|---|---|
+| `receiving.po_selection_rule` | `OLDEST_EXPECTED_DELIVERY_FIRST` |
+| `receiving.over_receipt_tolerance_percent` | `0` |
+| `receiving.price_variance_tolerance_percent` | `2` |
+| `receiving.manual_weight_enabled` | `false` |
+| `inventory.negative_stock_enabled` | `false` |
+| `inventory.default_picking_rule` | `FEFO` สำหรับสินค้ามีวันหมดอายุ; `FIFO` สำหรับสินค้าอื่น |
+| `return.default_expiry_hours` | `24` และห้ามเกินวันหมดอายุเดิม |
+| `yield.alert_enabled_without_standard` | `false` |
+| `ui.unauthorized_action_mode` | `HIDE` |
+| `security.maker_checker_critical_actions` | `true` |
+| `audit.retention_years` | `5` |
+
+ค่า Default ต้อง Seed ผ่าน Migration และเปลี่ยนได้ผ่าน Versioned Setting โดยไม่แก้ Source Code
+
 ## 7. RBAC, Menu and Action Control
 
 ### 7.1 Permission Model
@@ -223,6 +275,17 @@ flowchart TD
 
 ### 7.2 Role Management
 
+System Role ขั้นต่ำ:
+
+- `OWNER`
+- `ADMIN`
+- `PURCHASING`
+- `RECEIVING`
+- `WAREHOUSE`
+- `PROCESSING`
+- `BRANCH_MANAGER`
+- `MANAGEMENT`
+
 - Create, Edit, Clone, Activate/Deactivate และ Sort Role
 - System Role และ Custom Role
 - Permission Matrix จัดกลุ่มตาม Module
@@ -247,7 +310,7 @@ flowchart TD
 
 - View, Create, Update, Confirm, Approve, Cancel, Reverse, Export, Reprint และ Retry ต้องแยก Permission
 - ปิด Action ทั้งระบบแล้ว Backend ต้องปฏิเสธ แม้ Role ยังมี Permission
-- UI ที่ไม่มีสิทธิ์ให้ Hide หรือ Disable ตาม UX Rule
+- UI ที่ไม่มีสิทธิ์ให้ Hide เป็นค่าเริ่มต้น; แสดง Disabled เฉพาะกรณีต้องอธิบาย Dependency หรือสถานะของรายการ
 - Confirmed Transaction ใช้ Cancel/Reverse แทน Delete
 - Action สำคัญต้องรับ Reason และเขียน Audit Log
 - รองรับ Maker–Checker และห้ามผู้สร้างอนุมัติรายการตนเองเมื่อ Policy เปิดใช้
@@ -266,8 +329,8 @@ flowchart TD
 | Lot | `lot.view`, `lot.create`, `lot.update` |
 | Label | `label.print`, `label.reprint`, `label.template_manage` |
 | Inventory | `inventory.view`, `inventory.transfer`, `inventory.adjust`, `inventory.count` |
-| Withdrawal | `withdrawal.view`, `withdrawal.request`, `withdrawal.approve`, `withdrawal.issue`, `withdrawal.receive`, `withdrawal.cancel` |
-| Return | `withdrawal.return`, `withdrawal.return_approve` |
+| Withdrawal | `withdrawal.view`, `withdrawal.count`, `withdrawal.scan`, `withdrawal.issue`, `withdrawal.approve`, `withdrawal.cancel` |
+| Return | `inventory.return`, `inventory.return_approve` |
 | Processing | `processing.view`, `processing.create`, `processing.confirm`, `processing.close` |
 | Report | `report.view`, `report.export` |
 | Integration | `integration.view`, `integration.sync`, `integration.retry` |
@@ -284,11 +347,14 @@ Permission Catalog ต้องได้รับการอัปเดตแ�
 ### 8.1 Purchase Order and Receiving
 
 - PO ต้องมี Status Transition ที่ Backend ตรวจสอบ
+- ระบบแนะนำ PO ที่ยังเปิดและมี Expected Delivery Date เก่าที่สุดก่อน ผู้มีสิทธิ์เลือก PO อื่นได้โดยระบุเหตุผล
 - Receipt ต้องอ้างอิง PO เว้นแต่ Setting อนุญาตเป็นกรณีพิเศษ
 - รองรับ Full, Partial, Over และ Rejected Receipt
-- Over Receipt ต้องตรวจ Tolerance และ Approval
+- Over Receipt ค่าเริ่มต้น `0%`; หากเกินต้องตรวจ Tolerance และ Approval
+- Price Variance ค่าเริ่มต้น `±2%`; หากเกินต้องให้ผู้มีสิทธิ์ฝ่ายจัดซื้ออนุมัติ
 - Receipt Confirmation ต้องสร้าง Lot/Stock Movement ภายใน Transaction เดียวกัน
 - OCR Result ต้องแยก Raw Extraction, Confidence และ Confirmed Value
+- OCR Baseline อ่านเอกสารพิมพ์เท่านั้น; เอกสารเขียนมือเก็บเป็นหลักฐานและให้ผู้ใช้กรอกข้อมูลเอง
 - ผู้ใช้ต้องยืนยัน OCR ก่อนสร้างข้อมูลธุรกรรม
 
 ### 8.2 Lot, FIFO and FEFO
@@ -309,22 +375,33 @@ Permission Catalog ต้องได้รับการอัปเดตแ�
 
 ### 8.4 Withdrawal and Return
 
-- Flow รองรับ Request → Approve → Issue → Receive → Close/Cancel
+- Withdrawal Web แสดงเฉพาะตรวจนับ สแกน และเบิก; Approve, Return และ Adjustment ทำผ่าน Management Web
+- Backend รองรับ Request → Approve → Issue → Close/Cancel ตาม Setting แม้ Mobile UI จะแสดงเฉพาะ Action ที่ได้รับอนุญาต
 - Mobile Scan ต้องตรวจ Lot, Location, Expiry และ Available Quantity
 - Issue ต้องทำ Stock Deduction แบบ Atomic
 - Return ต้องเชื่อม Withdrawal เดิมและอัปเดตน้ำหนัก/จำนวนล่าสุด
-- Return ภายใน 24 ชั่วโมงเป็น Setting ที่ตรวจใน Backend
+- Return Expiry ค่าเริ่มต้น 24 ชั่วโมงนับจากเวลาคืนและต้องไม่เกิน Expiry เดิม
 
 ### 8.5 Processing and Yield
 
 - Processing Job ต้องเก็บ Input Lot, Input Quantity, Output, Waste และ Return
 - Output Lot ต้อง Trace กลับ Input Lot ได้
 - Yield Formula: `usable output ÷ input × 100`
-- Yield ต่ำกว่า Threshold ต้องแจ้งเตือนหรือขออนุมัติตาม Setting
+- หากยังไม่มี Standard Yield ให้คำนวณและรายงาน Actual Yield แต่ไม่แจ้งเตือนเทียบมาตรฐาน
+- เมื่อมี Standard/Minimum/Maximum Yield แล้ว ค่าต่ำกว่า Threshold ต้องแจ้งเตือนหรือขออนุมัติตาม Setting
 
 ## 9. Label Printing
 
 ทีมโครงการเป็นผู้กำหนดรุ่นเครื่องพิมพ์ ขนาดฉลาก วัสดุฉลาก Driver/Protocol และ Supported OS พร้อมทดสอบการพิมพ์และการสแกนในสภาพแวดล้อมใช้งานจริง ลูกค้าไม่ต้องเป็นผู้เลือกรุ่น Hardware
+
+Hardware Baseline:
+
+- Thermal-transfer Printer ความละเอียดไม่น้อยกว่า 300 dpi
+- ฉลากเริ่มต้นขนาด 60 × 40 มิลลิเมตร
+- ใช้วัสดุ Synthetic ที่ทนความเย็น ความชื้น และน้ำ พร้อม Resin Ribbon
+- รองรับ QR Code และ Code 128
+- เชื่อมต่อผ่าน Network เป็นหลักและ USB เป็นทางเลือกสำรอง
+- Printer, Label และ Ribbon ต้องผ่านการทดสอบติดทนและสแกนได้ในสภาพใช้งานจริงก่อน Pilot
 
 Flow:
 
@@ -347,11 +424,17 @@ Print Status ขั้นต่ำ: Queued, Printing, Success, Failed และ 
 
 ## 10. Integration
 
+- Integration Transport หลักใช้ REST/JSON ผ่าน HTTPS และ Versioned Contract
+- Inbound: Approved PO, PO Line และ Master Data ที่เกี่ยวข้อง
+- Outbound: Confirmed Receipt, Stock Adjustment, Return, Waste/Yield Summary และข้อมูลที่ ERP ต้องใช้
+- ห้ามใช้ Direct Write ไปยัง ERP Table; หาก ERP ไม่มี API ให้ใช้ Read-only View, Staging Table หรือ File Adapter ที่ทีม ERP อนุมัติ
 - รองรับ Mapping Product, Supplier, Branch, Warehouse, Unit, Tax และ Account Code
+- ทุกข้อมูลจาก ERP ต้องมี `source_system`, `external_id`, `source_version` และ `synced_at`
 - ใช้ Outbox/Job Pattern สำหรับการส่งข้อมูลที่ต้อง Retry
 - Status ขั้นต่ำ: Pending, Processing, Success, Failed และ Dead-letter
 - เก็บ Request, Response, Correlation ID, Attempt, Error และ Timestamp
 - Retry ต้องไม่สร้างรายการซ้ำในระบบปลายทาง
+- Inbound และ Outbound ต้องรองรับ Idempotency และ Reconciliation Report
 - Secret และ Credential ต้องเก็บใน Secret Store/Encrypted Setting
 
 ## 11. Audit and Security
@@ -367,18 +450,21 @@ Audit Record ต้องมี Actor, Session, Branch, Warehouse, Action, Targe
 
 - Secret ต้องไม่ปรากฏใน Log
 - Audit Log ต้องแก้ไข/ลบไม่ได้ผ่าน Application ปกติ
-- ต้องกำหนด Retention และ Archive Policy
+- Audit Log เก็บอย่างน้อย 5 ปี โดย Archive ได้แต่ต้องค้นคืนและ Export ได้ตามสิทธิ์
 - Backend Endpoint ทุกตัวต้องมี Authentication, Permission และ Scope Policy ที่ชัดเจน
 - ต้องป้องกัน Cross-branch และ Cross-warehouse Access
 - ต้องมี Rate Limit/Login Lockout ตาม Security Setting
 
 ## 12. Non-functional Requirements
 
-- หน้าค้นหาและธุรกรรมทั่วไปควรตอบสนองภายใน 3 วินาทีภายใต้โหลดปกติ
-- Barcode/QR Scan ต้องแสดงรายการอย่างรวดเร็วสำหรับงานต่อเนื่อง
+- Barcode/QR Scan และการแสดง Package ต้องตอบสนองไม่เกิน 2 วินาทีภายใต้โหลดปกติ
+- การบันทึก Stable Weight ต้องตอบสนองไม่เกิน 2 วินาที
+- รายงานทั่วไปต้องตอบสนองไม่เกิน 10 วินาทีภายใต้ Filter และปริมาณข้อมูลที่กำหนด
+- Availability Baseline ไม่น้อยกว่า 99.5% ตามรอบการวัดที่ตกลงร่วมกัน
 - รองรับ Browser ตาม Browser Support Matrix ที่อนุมัติ
 - ป้องกัน Double Submit และ Duplicate Transaction
-- มี Backup, Restore Test, Monitoring, Error Tracking และ Alert
+- มี Automated Backup, Restore Test, Disaster Recovery Plan, Monitoring, Error Tracking และ Alert
+- Backup Baseline: RPO ไม่เกิน 15 นาที และ RTO ไม่เกิน 4 ชั่วโมง
 - Database Migration ต้อง Version Control และมี Rollback/Forward-fix Plan
 - Transaction สต็อกต้องรักษาความถูกต้องเมื่อเกิด Error ระหว่างขั้นตอน
 
@@ -398,21 +484,41 @@ Audit Record ต้องมี Actor, Session, Branch, Warehouse, Action, Targe
 12. Test Mobile Withdrawal บน iOS Safari และ Android Chrome ตามรุ่นที่ตกลงกัน
 13. Test Audit Log Before/After และ Secret Redaction
 14. Test Backup/Restore และ Integration Retry
+15. Test Scale Stable/Tare/Gross/Net, Disconnect, Reconnect และ Admin Override
+16. Test Label Print, Scan, Moisture/Cold Adhesion และ Reprint Audit
+17. Contract Test และ Reconciliation ระหว่าง Hot Pod Man กับ ERP
+18. Performance Test ตามเกณฑ์ 2/2/10 วินาทีและ Availability/Recovery Baseline
 
-## 14. Technical Decisions Pending
+## 14. Technical Baseline Decisions
 
-- “Adunis” หมายถึง AdonisJS หรือ Technology อื่น
-- หากหมายถึง AdonisJS จะใช้แทน NestJS หรือแยกเป็น Service ใด
-- REST API Versioning และ Error Contract
-- Authentication Provider และ Password/SSO Policy
-- Session/Permission Cache Invalidation Strategy
-- ANY หรือ ALL เป็น Default ของ Menu Permission
-- User-specific Permission Override จำเป็นหรือใช้ Role เท่านั้น
-- Deep Link Policy เมื่อ `show_in_navigation = false`
-- Browser/OS Version ขั้นต่ำ
-- ทีมโครงการกำหนด Print Control API/Protocol และ Supported OS
-- ทีมโครงการล็อกและรับรองรุ่น Label Printer/Scale ที่ใช้กับระบบ
-- OCR Provider, Field, Accuracy และ Manual Review Flow
-- ERP/Accounting Target, Transport และ Mapping
-- Audit/Security Log Retention
-- Backup RPO/RTO และ Availability Target
+| หัวข้อ | Baseline |
+|---|---|
+| Backend | NestJS; ไม่ใช้ AdonisJS ใน Baseline |
+| API | REST/JSON, HTTPS และ Base Path `/api/v1` |
+| Error Contract | Standard Error Code, HTTP Status, Message, Detail, Correlation ID และ Field Error |
+| Authentication | Local Identity + JWT Access/Refresh Token; SSO เป็น Change Request |
+| Authorization | Role-based Permission + Branch/Warehouse Scope; ไม่ใช้ User-specific Allow Override |
+| Permission Default | Default Deny และ Backend ตรวจทุก Request |
+| Menu/Action | Hide เมื่อไม่มีสิทธิ์; Direct URL/API ต้องถูกปฏิเสธ |
+| Session/Permission Change | เพิ่ม Permission Version และบังคับ Refresh เมื่อ Role/Permission เปลี่ยน |
+| Desktop Browser | Chrome และ Edge สอง Major Version ล่าสุด |
+| Mobile Browser | iOS Safari และ Android Chrome สอง Major Version ล่าสุด |
+| Device OS | Windows 11 64-bit |
+| ERP Integration | REST/JSON ผ่าน Adapter; ไม่มี Direct Write เข้า ERP |
+| OCR | เอกสารพิมพ์ + Manual Confirmation; ลายมือเป็นหลักฐานเท่านั้น |
+| Audit Retention | อย่างน้อย 5 ปี |
+| Backup/Recovery | RPO 15 นาที, RTO 4 ชั่วโมง และ Availability 99.5% |
+
+## 15. External Inputs Required
+
+ทีม Development เริ่มพัฒนาจาก Baseline ได้โดยไม่ต้องรอการตัดสินใจเพิ่มเติม แต่ Integration, Configuration และ Production Sizing ต้องได้รับข้อมูลจริงต่อไปนี้:
+
+- ERP/PO API Documentation, Test Credential และตัวอย่าง Payload
+- รายการ Outbound Data และ Mapping Code ที่ ERP ต้องรับ
+- Master Data ของบริษัท สาขา คลัง Location สินค้า หน่วย Supplier ผู้ใช้ และบทบาท
+- ตัวอย่างบิล/ใบส่งของแบบพิมพ์สำหรับทดสอบ OCR
+- Logo และข้อความที่ต้องแสดงบน Label
+- UAT User, Approver และผู้มีอำนาจตัดสินใจ
+- ปริมาณธุรกรรมและผู้ใช้พร้อมกันโดยประมาณก่อน Production Rollout
+
+รุ่นเครื่องชั่ง เครื่องพิมพ์ Label, Protocol, Driver, ขนาดฉลาก วัสดุฉลาก และ Device Agent เป็นความรับผิดชอบของทีมโครงการ ไม่ใช่ External Input จากลูกค้า
