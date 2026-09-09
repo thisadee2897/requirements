@@ -8,7 +8,7 @@
 
 ระบบแบ่งเป็น 2 Web Application ที่ใช้ Backend และฐานข้อมูลกลางร่วมกัน
 
-1. **Management Web** สำหรับ Master Data, Dashboard, Report, PO, รับสินค้า, คลัง, การตั้งค่า และงานบริหาร
+1. **Management Web** สำหรับ Sync/ดูข้อมูลสินค้าจาก ERP, Dashboard, Report, ดู PO ที่รับผ่าน Webhook, รับสินค้า, คลัง, การตั้งค่า และงานบริหาร
 2. **Withdrawal Web (Mobile UI Only)** สำหรับตรวจนับ สแกน และเบิกสินค้าผ่าน Mobile Web Browser บนโทรศัพท์มือถือเท่านั้น
 
 งานรับเข้าและพิมพ์ Label ทำบนคอมพิวเตอร์คลังที่ติดตั้ง Print Control เพื่อเชื่อมต่อกับ Label Printer โดยทีมโครงการเป็นผู้กำหนด จัดหา ติดตั้ง และรับรอง Hardware ที่รองรับทั้งหมด
@@ -25,13 +25,14 @@
 | Device Agent | Local Service บนคอมพิวเตอร์คลังสำหรับเชื่อมเครื่องชั่งและควบคุมงานพิมพ์ |
 | Printing | Print Control, Thermal-transfer Label Printer และวัสดุฉลากที่ทีมโครงการกำหนด/พัฒนา |
 | Client | Management: Computer/Notebook Browser; Withdrawal: Mobile Browser บน Smartphone เท่านั้น |
-| External Integration | ระบบจัดซื้อเดิม ระบบบัญชี/ERP และ OCR ผ่าน Adapter/API |
+| External Integration | PO จาก ERP ผ่าน Webhook; ข้อมูลสินค้าและข้อมูลที่เกี่ยวข้องผ่าน Product Sync; ข้อมูลกลับ ERP และ OCR ผ่าน Adapter/API |
 
 หลักการทางเทคนิค:
 
 - Frontend ต้องเรียกข้อมูลผ่าน Backend API และห้ามเชื่อม PostgreSQL โดยตรง
 - Backend เป็นผู้ควบคุม Business Rule, Permission, Scope และ Transaction
-- ระบบ Hot Pod Man เป็นเจ้าของ Operational Stock Ledger ส่วน ERP เป็นเจ้าของ PO ที่อนุมัติและข้อมูลบัญชี
+- ระบบ Hot Pod Man เป็นเจ้าของ Operational Stock Ledger ส่วน ERP เป็นเจ้าของเอกสาร PO ข้อมูลสินค้าหลักและข้อมูลที่เกี่ยวข้องทั้งหมด รวมถึงข้อมูลบัญชี
+- PO สร้างและจัดการใน ERP แล้วรับเข้าผ่าน Webhook; ข้อมูลสินค้า Sync จาก ERP เข้าฐานข้อมูล Hot Pod Man โดยไม่มีการสร้าง/แก้ไขข้อมูลสินค้าหลักซ้ำผ่านระบบนี้
 - ห้าม Application หรือทีม Hot Pod Man เขียนตรงลง Business Table ของ ERP
 - API ที่สร้างหรือเปลี่ยนธุรกรรมต้องรองรับ Idempotency
 - Transaction สต็อกต้องทำแบบ Atomic และตรวจสอบย้อนหลังได้
@@ -49,7 +50,10 @@ flowchart LR
     WW --> API
     API --> DB[(hotpodman_inventory PostgreSQL)]
     API --> IQ[Integration Inbox/Outbox]
-    IQ <--> ERPAPI[ERP/Purchasing API]
+    IQ <--> ERPAPI[ERP API / Product Sync]
+    ERPAPI -->|PO Webhook| WH[PO Webhook Receiver]
+    WH --> IQ
+    IQ -->|PO and Product Sync| DB
     ERPAPI --> ERPDB[(ERP Database)]
     API --> OCR[OCR Provider]
     MW <--> DA[Device Agent / Print Control]
@@ -61,7 +65,9 @@ flowchart LR
 ### 3.1 Management Web
 
 - รองรับหน้าจอคอมพิวเตอร์และโน้ตบุ๊กตาม Browser Support Matrix
-- เป็นพื้นที่ทำงานของ Dashboard, Report, Master Data, PO, Receiving, Inventory และ Settings
+- เป็นพื้นที่ทำงานของ Dashboard, Report, Product Sync, PO จาก ERP, Receiving, Inventory และ Settings
+- หน้าสินค้าแสดงข้อมูลที่ Sync จาก ERP พร้อมสถานะและคำสั่ง Sync ตามสิทธิ์ ไม่มีการแก้ไขข้อมูลสินค้าหลักใน Hot Pod Man
+- หน้า PO ใช้ดูและอ้างอิงรับสินค้า โดยไม่มีคำสั่งสร้าง แก้ไข อนุมัติ ยกเลิก หรือปิดเอกสาร PO
 - งานรับเข้าและพิมพ์ Label ต้องตรวจสถานะ Print Control ก่อนส่งคำสั่ง
 
 ### 3.2 Withdrawal Web
@@ -76,8 +82,9 @@ flowchart LR
 
 | Domain | Source of Truth | หมายเหตุ |
 |---|---|---|
-| Approved PO และ PO Line | ERP/ระบบจัดซื้อ | Hot Pod Man เก็บสำเนาพร้อม `external_id` และ `synced_at` |
-| Product/Supplier/Branch/Unit Code | ERP หรือ Master Data ที่ได้รับอนุมัติ | เก็บ Mapping และ Version ใน Hot Pod Man |
+| PO, PO Line และสถานะเอกสาร | ERP | รับผ่าน Webhook และเก็บสำเนาพร้อมรหัสอ้างอิงต้นทาง; ไม่มีการจัดการเอกสาร PO ใน Hot Pod Man |
+| Product และข้อมูลที่เกี่ยวข้องทั้งหมด | ERP | Sync ครั้งแรกและอัปเดตลงฐานข้อมูล Hot Pod Man รวมหมวด หน่วย อัตราแปลง Barcode และรายละเอียดสินค้า โดยไม่สร้างหรือแก้ข้อมูลซ้ำในระบบนี้ |
+| Supplier/Branch Code | ERP หรือ Master Data ที่ได้รับอนุมัติ | เก็บ Mapping และ Version ใน Hot Pod Man |
 | Receiving, Lot, Package และ Location | Hot Pod Man | ERP ไม่แก้ไขข้อมูลปฏิบัติการโดยตรง |
 | Stock Ledger, Count, Withdrawal, Return และ Yield | Hot Pod Man | เป็น Operational Inventory Source of Truth |
 | Accounting Posting และ Financial Document | ERP/ระบบบัญชี | รับข้อมูลที่ยืนยันแล้วจาก Integration Outbox |
@@ -205,9 +212,9 @@ Setting แต่ละรายการต้องมี:
 | Organization | Timezone, Currency, Date Format, Default Language |
 | Branch/Warehouse | Default Warehouse, Quarantine/Waste Location, Cross-branch Policy |
 | Document | Prefix, Running Number, Reset Rule |
-| PO | Approval Flow, Approval Limit, Over-receipt Tolerance, Close Rule |
+| PO Reference | สถานะ PO จาก ERP ที่อนุญาตให้รับสินค้า และการแสดงยอดรับ/ยอดค้างรับ; การอนุมัติและปิด PO ทำใน ERP |
 | Receiving | PO Required, Lot/Expiry Required, Partial/Over Receipt, OCR Evidence |
-| Lot/Expiry | Lot Generation, Shelf Life, Expiry Alert, Quarantine Rule |
+| Lot/Expiry | Lot Generation, Expiry Alert, Quarantine Rule; Shelf Life รายสินค้าอ้างอิงข้อมูลที่ Sync จาก ERP |
 | FIFO/FEFO | Default Picking Rule, Category Override, Manual Lot Override |
 | Label | Print Control, Printer, Template, Label Size, Copy Count, Retry |
 | Stock Count | Blind Count, Difference Threshold, Freeze Stock, Approval |
@@ -320,9 +327,9 @@ System Role ขั้นต่ำ:
 | Module | Permission Codes |
 |---|---|
 | Dashboard | `dashboard.view` |
-| Product | `product.view`, `product.manage` |
+| Product | `product.view`; การ Sync ใช้ `integration.sync` |
 | Supplier | `supplier.view`, `supplier.manage` |
-| Purchase Order | `purchase_order.view`, `purchase_order.create`, `purchase_order.update`, `purchase_order.approve`, `purchase_order.cancel` |
+| Purchase Order | `purchase_order.view`; การประมวลผล Webhook ซ้ำใช้ `integration.retry` |
 | Receiving | `receiving.view`, `receiving.create`, `receiving.update`, `receiving.confirm`, `receiving.cancel` |
 | OCR | `receiving.ocr_upload`, `receiving.ocr_confirm` |
 | Claim | `claim.view`, `claim.create`, `claim.update`, `claim.close` |
@@ -346,7 +353,10 @@ Permission Catalog ต้องได้รับการอัปเดตแ�
 
 ### 8.1 Purchase Order and Receiving
 
-- PO ต้องมี Status Transition ที่ Backend ตรวจสอบ
+- Backend รับ PO และการเปลี่ยนแปลงสถานะเอกสารจาก ERP ผ่าน Webhook เท่านั้น ไม่มี API สำหรับผู้ใช้สร้าง แก้ไข อนุมัติ ยกเลิก หรือปิดเอกสาร PO ใน Hot Pod Man
+- แยกสถานะเอกสารจาก ERP ออกจากยอดรับจริงและความคืบหน้าการรับสินค้าใน Hot Pod Man
+- ใช้รหัสสินค้าและข้อมูลที่ Sync จาก ERP ใน PO/Receipt หากยังจับคู่สินค้าหรือหน่วยไม่ได้ให้คง PO ที่รับมาและรอ Sync สำเร็จก่อนยืนยัน Receipt ที่เกี่ยวข้อง
+- การเปลี่ยนหรือยกเลิก PO จาก ERP ต้องไม่แก้ประวัติ Receipt/Stock Movement ที่ยืนยันแล้ว หากขัดกับยอดรับจริงให้ระงับการรับเพิ่มและแสดงปัญหาเพื่อตรวจสอบ
 - ระบบแนะนำ PO ที่ยังเปิดและมี Expected Delivery Date เก่าที่สุดก่อน ผู้มีสิทธิ์เลือก PO อื่นได้โดยระบุเหตุผล
 - Receipt ต้องอ้างอิง PO เว้นแต่ Setting อนุญาตเป็นกรณีพิเศษ
 - รองรับ Full, Partial, Over และ Rejected Receipt
@@ -425,10 +435,11 @@ Print Status ขั้นต่ำ: Queued, Printing, Success, Failed และ 
 ## 10. Integration
 
 - Integration Transport หลักใช้ REST/JSON ผ่าน HTTPS และ Versioned Contract
-- Inbound: Approved PO, PO Line และ Master Data ที่เกี่ยวข้อง
+- Inbound PO: รับ PO, PO Line และการเปลี่ยนแปลงสถานะจาก ERP ผ่าน Webhook
+- Inbound Product: Sync ข้อมูลสินค้าและข้อมูลที่เกี่ยวข้องทั้งหมดจาก ERP ลงฐานข้อมูล Hot Pod Man ทั้งครั้งแรกและการอัปเดตภายหลัง
 - Outbound: Confirmed Receipt, Stock Adjustment, Return, Waste/Yield Summary และข้อมูลที่ ERP ต้องใช้
-- ห้ามใช้ Direct Write ไปยัง ERP Table; หาก ERP ไม่มี API ให้ใช้ Read-only View, Staging Table หรือ File Adapter ที่ทีม ERP อนุมัติ
-- รองรับ Mapping Product, Supplier, Branch, Warehouse, Unit, Tax และ Account Code
+- ห้ามใช้ Direct Write ไปยัง ERP Table; Product Sync ใช้ช่องทางที่ ERP รองรับและยืนยัน ส่วน PO ใช้ Webhook ตามขอบเขตที่กำหนด
+- จับคู่ Product และข้อมูลที่ Sync ด้วยรหัสอ้างอิงจาก ERP โดยอัตโนมัติ ไม่ให้ผู้ใช้สร้างหรือจับคู่สินค้าใหม่ทีละรายการ; รองรับ Mapping ส่วนเชื่อมต่อ Supplier, Branch, Warehouse, Tax และ Account Code
 - ทุกข้อมูลจาก ERP ต้องมี `source_system`, `external_id`, `source_version` และ `synced_at`
 - ใช้ Outbox/Job Pattern สำหรับการส่งข้อมูลที่ต้อง Retry
 - Status ขั้นต่ำ: Pending, Processing, Success, Failed และ Dead-letter
@@ -436,6 +447,23 @@ Print Status ขั้นต่ำ: Queued, Printing, Success, Failed และ 
 - Retry ต้องไม่สร้างรายการซ้ำในระบบปลายทาง
 - Inbound และ Outbound ต้องรองรับ Idempotency และ Reconciliation Report
 - Secret และ Credential ต้องเก็บใน Secret Store/Encrypted Setting
+
+### 10.1 PO Webhook
+
+- ตรวจสอบแหล่งที่มาของ Webhook ตามกลไกที่ตกลงกับ ERP ก่อนรับประมวลผล
+- บันทึกเหตุการณ์ที่รับเข้าก่อนตอบรับ เพื่อให้ประมวลผลซ้ำได้เมื่อเกิดข้อผิดพลาด
+- ใช้รหัสอ้างอิง PO/รายการจาก ERP เพื่อเพิ่มหรืออัปเดตสำเนาเดิม โดยการส่งซ้ำไม่สร้าง PO, Receipt หรือ Stock Movement ซ้ำ
+- ตรวจลำดับหรือรุ่นข้อมูลตาม Contract เพื่อไม่ให้เหตุการณ์เก่าทับสถานะล่าสุด
+- แสดงผลรับ/ประมวลผล Webhook และสาเหตุที่ไม่สำเร็จ พร้อม Retry ตามสิทธิ์
+
+### 10.2 Product Sync
+
+- รองรับการนำเข้าครั้งแรกและอัปเดตข้อมูลสินค้าที่เพิ่ม เปลี่ยนแปลง หรือปิดใช้งานจาก ERP โดยใช้ ERP เป็นแหล่งข้อมูลหลัก
+- เก็บข้อมูลสินค้าและข้อมูลที่เกี่ยวข้องทั้งหมดตาม Contract ในฐานข้อมูล Hot Pod Man เพื่อใช้กับงานคลังและรายงาน
+- ใช้รหัสอ้างอิง ERP ที่คงที่และรุ่นข้อมูลเพื่อให้ Sync ซ้ำได้โดยไม่สร้างสินค้าซ้ำหรือให้ข้อมูลเก่าทับข้อมูลล่าสุด
+- รองรับการสั่ง Sync และ Sync ซ้ำโดยผู้มีสิทธิ์ พร้อมแสดงเวลาสำเร็จล่าสุด ผลการทำงาน และข้อผิดพลาด
+- การ Sync ล้มเหลวต้องไม่ทำให้ข้อมูลที่ยังไม่ครบถูกนำไปใช้ยืนยันรายการรับสินค้า และต้องดำเนินการต่อหรือซ้ำได้
+- การอัปเดต/ปิดใช้งานข้อมูลสินค้าต้องคงประวัติ Receipt, Lot และ Stock Movement เดิมไว้ ไม่ลบหรือคำนวณธุรกรรมย้อนหลังใหม่จากข้อมูลสินค้ารุ่นล่าสุด
 
 ## 11. Audit and Security
 
@@ -488,6 +516,10 @@ Audit Record ต้องมี Actor, Session, Branch, Warehouse, Action, Targe
 16. Test Label Print, Scan, Moisture/Cold Adhesion และ Reprint Audit
 17. Contract Test และ Reconciliation ระหว่าง Hot Pod Man กับ ERP
 18. Performance Test ตามเกณฑ์ 2/2/10 วินาทีและ Availability/Recovery Baseline
+19. Test PO Webhook: ตรวจแหล่งที่มา รับซ้ำ รับผิดลำดับ แก้ไข/ยกเลิก PO หลังรับบางส่วน และประมวลผลซ้ำหลังเกิดข้อผิดพลาด
+20. Test Product Sync: นำเข้าครั้งแรก อัปเดต ปิดใช้งาน Sync ซ้ำ ข้อมูลไม่ครบ และ Retry โดยคงประวัติเดิม
+21. Test ERP → PO Webhook/Product Sync → Receipt โดยไม่ต้องสร้าง PO หรือตั้งค่าสินค้าซ้ำใน Hot Pod Man
+22. Test UI/API ว่าผู้ใช้ไม่สามารถสร้างหรือแก้ไข PO และข้อมูลสินค้าหลักผ่าน Hot Pod Man ได้
 
 ## 14. Technical Baseline Decisions
 
@@ -504,7 +536,7 @@ Audit Record ต้องมี Actor, Session, Branch, Warehouse, Action, Targe
 | Desktop Browser | Chrome และ Edge สอง Major Version ล่าสุด |
 | Mobile Browser | iOS Safari และ Android Chrome สอง Major Version ล่าสุด |
 | Device OS | Windows 11 64-bit |
-| ERP Integration | REST/JSON ผ่าน Adapter; ไม่มี Direct Write เข้า ERP |
+| ERP Integration | PO ผ่าน Webhook; Product Sync ลงฐานข้อมูล Hot Pod Man; Outbound ผ่าน Adapter; ไม่มี Direct Write เข้า ERP |
 | OCR | เอกสารพิมพ์ + Manual Confirmation; ลายมือเป็นหลักฐานเท่านั้น |
 | Audit Retention | อย่างน้อย 5 ปี |
 | Backup/Recovery | RPO 15 นาที, RTO 4 ชั่วโมง และ Availability 99.5% |
@@ -513,9 +545,10 @@ Audit Record ต้องมี Actor, Session, Branch, Warehouse, Action, Targe
 
 ทีม Development เริ่มพัฒนาจาก Baseline ได้โดยไม่ต้องรอการตัดสินใจเพิ่มเติม แต่ Integration, Configuration และ Production Sizing ต้องได้รับข้อมูลจริงต่อไปนี้:
 
-- ERP/PO API Documentation, Test Credential และตัวอย่าง Payload
+- PO Webhook Documentation วิธีตรวจสอบแหล่งที่มา และตัวอย่างเหตุการณ์สร้าง/แก้ไข/ยกเลิก PO
+- Product Sync Documentation สิทธิ์เชื่อมต่อ และข้อมูลสินค้า/ข้อมูลที่เกี่ยวข้องจาก ERP สำหรับทดสอบ
 - รายการ Outbound Data และ Mapping Code ที่ ERP ต้องรับ
-- Master Data ของบริษัท สาขา คลัง Location สินค้า หน่วย Supplier ผู้ใช้ และบทบาท
+- ข้อมูลสินค้าและข้อมูลที่เกี่ยวข้องใน ERP ที่พร้อมให้ Sync พร้อมข้อมูลพื้นฐานบริษัท สาขา คลัง Location Supplier ผู้ใช้ และบทบาทสำหรับตั้งค่าการใช้งาน
 - ตัวอย่างบิล/ใบส่งของแบบพิมพ์สำหรับทดสอบ OCR
 - Logo และข้อความที่ต้องแสดงบน Label
 - UAT User, Approver และผู้มีอำนาจตัดสินใจ
