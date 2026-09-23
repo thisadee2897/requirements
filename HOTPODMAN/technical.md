@@ -1,4 +1,4 @@
-# Hot Pod Man — Technical Specification
+# Hotpot Man — Technical Specification
 
 > เอกสารข้อมูลเทคนิคสำหรับใช้วิเคราะห์ ออกแบบ และตกลงแนวทางกับทีม Development
 >
@@ -19,21 +19,22 @@
 |---|---|
 | Frontend | Next.js สำหรับ Management Web และ Withdrawal Web |
 | Backend API | NestJS เป็น Backend หลักของระบบ; AdonisJS ไม่รวมใน Technical Baseline เว้นแต่มี Change Request |
-| Database | PostgreSQL Database ชื่อ `hotpodman_inventory` แยกจาก ERP |
+| Database | PostgreSQL Database ชื่อ `hotpotman_inventory` แยกจาก ERP |
 | Data Access | TypeORM สำหรับ Transaction/Migration และใช้ Raw SQL/Materialized View สำหรับ Reporting; ห้าม Frontend เชื่อม Database โดยตรง |
 | Scale Hardware | เครื่องชั่งและ Scale Connector ที่ทีมโครงการกำหนด/พัฒนา พร้อม Stable Weight, Tare, Gross และ Net Weight |
 | Device Agent | Local Service บนคอมพิวเตอร์คลังสำหรับเชื่อมเครื่องชั่งและควบคุมงานพิมพ์ |
 | Printing | Print Control, Thermal-transfer Label Printer และวัสดุฉลากที่ทีมโครงการกำหนด/พัฒนา |
 | Client | Management: Computer/Notebook Browser; Withdrawal: Mobile Browser บน Smartphone เท่านั้น |
 | External Integration | PO จาก ERP ผ่าน Webhook; ข้อมูลสินค้าและข้อมูลที่เกี่ยวข้องผ่าน Product Sync; ข้อมูลกลับ ERP และ OCR ผ่าน Adapter/API |
+| Cloud Infrastructure | DigitalOcean สำหรับ Application Server, Managed PostgreSQL, Object Storage, VPC, Firewall, Backup และ Monitoring |
 
 หลักการทางเทคนิค:
 
 - Frontend ต้องเรียกข้อมูลผ่าน Backend API และห้ามเชื่อม PostgreSQL โดยตรง
 - Backend เป็นผู้ควบคุม Business Rule, Permission, Scope และ Transaction
-- ระบบ Hot Pod Man เป็นเจ้าของ Operational Stock Ledger ส่วน ERP เป็นเจ้าของเอกสาร PO ข้อมูลสินค้าหลักและข้อมูลที่เกี่ยวข้องทั้งหมด รวมถึงข้อมูลบัญชี
-- PO สร้างและจัดการใน ERP แล้วรับเข้าผ่าน Webhook; ข้อมูลสินค้า Sync จาก ERP เข้าฐานข้อมูล Hot Pod Man โดยไม่มีการสร้าง/แก้ไขข้อมูลสินค้าหลักซ้ำผ่านระบบนี้
-- ห้าม Application หรือทีม Hot Pod Man เขียนตรงลง Business Table ของ ERP
+- ระบบ Hotpot Man เป็นเจ้าของ Operational Stock Ledger ส่วน ERP เป็นเจ้าของเอกสาร PO ข้อมูลสินค้าหลักและข้อมูลที่เกี่ยวข้องทั้งหมด รวมถึงข้อมูลบัญชี
+- PO สร้างและจัดการใน ERP แล้วรับเข้าผ่าน Webhook; ข้อมูลสินค้า Sync จาก ERP เข้าฐานข้อมูล Hotpot Man โดยไม่มีการสร้าง/แก้ไขข้อมูลสินค้าหลักซ้ำผ่านระบบนี้
+- ห้าม Application หรือทีม Hotpot Man เขียนตรงลง Business Table ของ ERP
 - API ที่สร้างหรือเปลี่ยนธุรกรรมต้องรองรับ Idempotency
 - Transaction สต็อกต้องทำแบบ Atomic และตรวจสอบย้อนหลังได้
 - ห้ามเชื่อ Branch/Warehouse/User Scope จากค่าที่ Browser ส่งมาเพียงอย่างเดียว
@@ -48,7 +49,8 @@ flowchart LR
     WB --> WW[Next.js Withdrawal Web]
     MW --> API[Backend REST API]
     WW --> API
-    API --> DB[(hotpodman_inventory PostgreSQL)]
+    API --> DB[(Managed PostgreSQL: hotpotman_inventory)]
+    API --> OS[(Private Object Storage: Bill/OCR/Claim/Export)]
     API --> IQ[Integration Inbox/Outbox]
     IQ <--> ERPAPI[ERP API / Product Sync]
     ERPAPI -->|PO Webhook| WH[PO Webhook Receiver]
@@ -62,15 +64,35 @@ flowchart LR
     DA --> API
 ```
 
-### 3.1 Management Web
+### 3.1 DigitalOcean Infrastructure Baseline
+
+Hotpot Man เป็นเจ้าของบัญชี DigitalOcean และค่าใช้จ่าย Cloud ตั้งแต่เริ่มโครงการ โดยแบ่ง Environment เป็น UAT และ Production แยกกันภายใต้บัญชีของบริษัท ห้ามใช้ฐานข้อมูลหรือ Credential ชุดเดียวกันระหว่างสอง Environment ส่วนทีม SUNFORD ได้รับสิทธิ์ที่จำเป็นเพื่อจัดเตรียม ติดตั้ง Deploy และดูแลระบบตามขอบเขตงาน
+
+| องค์ประกอบ | Baseline | หน้าที่ |
+|---|---|---|
+| DigitalOcean Project | Hotpot Man เปิดบัญชีและสร้าง Project สำหรับ UAT และ Production ตั้งแต่เริ่มโครงการ | แยกทรัพยากร สิทธิ์ และค่าใช้จ่ายของแต่ละ Environment; SUNFORD ใช้สิทธิ์ที่บริษัทมอบให้ในการติดตั้งและดูแล |
+| Application Server | Droplet อย่างน้อย 1 เครื่องต่อ Environment; เริ่มต้น 2 vCPU, RAM 4 GB | รัน Reverse Proxy, Next.js Management Web, Next.js Withdrawal Web และ NestJS API |
+| Database | Managed PostgreSQL อย่างน้อย 1 Cluster ต่อ Environment; เริ่มต้น 1 vCPU, RAM 2 GB | ฐานข้อมูล `hotpotman_inventory` แยกจาก ERP พร้อม Backup และ Point-in-time Recovery |
+| Object Storage | DigitalOcean Spaces แบบ Private อย่างน้อย 1 Bucket ต่อ Environment | เก็บภาพบิล/ใบส่งของ เอกสาร OCR หลักฐาน Claim และไฟล์ Export; PostgreSQL เก็บเฉพาะ Metadata และ Object Key |
+| Network | VPC เดียวกันใน Region เดียวกันสำหรับ Droplet และ Managed PostgreSQL | ให้ Application เชื่อม Database ผ่าน Private Network |
+| Security | Cloud Firewall, Database Trusted Sources, HTTPS/TLS และ Secret Management | เปิด Internet เฉพาะ HTTPS; จำกัด SSH ตาม IP ผู้ดูแล; Database อนุญาตเฉพาะ Application Server/ผู้ดูแลที่ได้รับอนุญาต |
+| Operations | Droplet Backup, Managed Database Backup/PITR, Monitoring, Resource Alert และ Billing Alert | ตรวจสุขภาพระบบ แจ้งเตือนการใช้ทรัพยากร/ค่าใช้จ่าย และรองรับแผนกู้คืน |
+
+- Hotpot Man ต้องเปิดบัญชี DigitalOcean และสร้างทั้ง UAT/Production Project ตั้งแต่เริ่มโครงการ; UAT Infrastructure ต้องพร้อมก่อนวันเริ่มโครงการ เพื่อใช้ทดสอบ ERP Webhook และ Master Sync ตั้งแต่วันแรก
+- Production Infrastructure อยู่ในบัญชีของ Hotpot Man เช่นเดียวกัน และต้องพร้อมผ่านการทดสอบ Deploy, Backup/Restore, Firewall และ Domain/SSL ก่อนเริ่ม UAT
+- Region ของ Droplet, Managed PostgreSQL และ Spaces ต้องเลือกให้เหมาะกับผู้ใช้งานและอยู่ Region เดียวกันเท่าที่บริการรองรับ
+- Reserved IP ใช้เมื่อ ERP ต้อง Allowlist IP ของระบบ Hotpot Man หรือมีความจำเป็นต้องคง Public IP เดิมเมื่อเปลี่ยน Droplet
+- Load Balancer, Kubernetes, App Platform, Managed Caching, GPU, AI Inference, Search, Vector Database และ Streaming ไม่อยู่ใน Baseline ของ Pilot; ประเมินเพิ่มเมื่อปริมาณใช้งานหรือข้อกำหนด Availability เปลี่ยน
+
+### 3.2 Management Web
 
 - รองรับหน้าจอคอมพิวเตอร์และโน้ตบุ๊กตาม Browser Support Matrix
 - เป็นพื้นที่ทำงานของ Dashboard, Report, Product Sync, PO จาก ERP, Receiving, Inventory และ Settings
-- หน้าสินค้าแสดงข้อมูลที่ Sync จาก ERP พร้อมสถานะและคำสั่ง Sync ตามสิทธิ์ ไม่มีการแก้ไขข้อมูลสินค้าหลักใน Hot Pod Man
+- หน้าสินค้าแสดงข้อมูลที่ Sync จาก ERP พร้อมสถานะและคำสั่ง Sync ตามสิทธิ์ ไม่มีการแก้ไขข้อมูลสินค้าหลักใน Hotpot Man
 - หน้า PO ใช้ดูและอ้างอิงรับสินค้า โดยไม่มีคำสั่งสร้าง แก้ไข อนุมัติ ยกเลิก หรือปิดเอกสาร PO
 - งานรับเข้าและพิมพ์ Label ต้องตรวจสถานะ Print Control ก่อนส่งคำสั่ง
 
-### 3.2 Withdrawal Web
+### 3.3 Withdrawal Web
 
 - Mobile UI Only
 - รองรับเฉพาะ Mobile Web Browser บนโทรศัพท์มือถือ
@@ -78,18 +100,18 @@ flowchart LR
 - ต้องรองรับการเปิดกล้องเพื่อสแกน Barcode/QR Code เมื่ออุปกรณ์และ Browser อนุญาต
 - UI ต้องเหมาะกับการใช้งานมือเดียวและลดจำนวนขั้นตอนระหว่างสแกนกับยืนยันรายการ
 
-### 3.3 Source of Truth
+### 3.4 Source of Truth
 
 | Domain | Source of Truth | หมายเหตุ |
 |---|---|---|
-| PO, PO Line และสถานะเอกสาร | ERP | รับผ่าน Webhook และเก็บสำเนาพร้อมรหัสอ้างอิงต้นทาง; ไม่มีการจัดการเอกสาร PO ใน Hot Pod Man |
-| Product และข้อมูลที่เกี่ยวข้องทั้งหมด | ERP | Sync ครั้งแรกและอัปเดตลงฐานข้อมูล Hot Pod Man รวมหมวด หน่วย อัตราแปลง Barcode และรายละเอียดสินค้า โดยไม่สร้างหรือแก้ข้อมูลซ้ำในระบบนี้ |
-| Supplier/Branch Code | ERP หรือ Master Data ที่ได้รับอนุมัติ | เก็บ Mapping และ Version ใน Hot Pod Man |
-| Receiving, Lot, Package และ Location | Hot Pod Man | ERP ไม่แก้ไขข้อมูลปฏิบัติการโดยตรง |
-| Stock Ledger, Count, Withdrawal, Return และ Yield | Hot Pod Man | เป็น Operational Inventory Source of Truth |
+| PO, PO Line และสถานะเอกสาร | ERP | รับผ่าน Webhook และเก็บสำเนาพร้อมรหัสอ้างอิงต้นทาง; ไม่มีการจัดการเอกสาร PO ใน Hotpot Man |
+| Product และข้อมูลที่เกี่ยวข้องทั้งหมด | ERP | Sync ครั้งแรกและอัปเดตลงฐานข้อมูล Hotpot Man รวมหมวด หน่วย อัตราแปลง Barcode และรายละเอียดสินค้า โดยไม่สร้างหรือแก้ข้อมูลซ้ำในระบบนี้ |
+| Supplier/Branch Code | ERP หรือ Master Data ที่ได้รับอนุมัติ | เก็บ Mapping และ Version ใน Hotpot Man |
+| Receiving, Lot, Package และ Location | Hotpot Man | ERP ไม่แก้ไขข้อมูลปฏิบัติการโดยตรง |
+| Stock Ledger, Count, Withdrawal, Return และ Yield | Hotpot Man | เป็น Operational Inventory Source of Truth |
 | Accounting Posting และ Financial Document | ERP/ระบบบัญชี | รับข้อมูลที่ยืนยันแล้วจาก Integration Outbox |
 
-### 3.4 Hardware and Device Agent
+### 3.5 Hardware and Device Agent
 
 - ทีมโครงการเป็นผู้เลือกรุ่น จัดหา ติดตั้ง และรับรองเครื่องชั่งกับ Label Printer
 - Device Agent ใช้ Windows 11 64-bit เป็น Baseline และทำงานเป็น Local Service
@@ -353,8 +375,8 @@ Permission Catalog ต้องได้รับการอัปเดตแ�
 
 ### 8.1 Purchase Order and Receiving
 
-- Backend รับ PO และการเปลี่ยนแปลงสถานะเอกสารจาก ERP ผ่าน Webhook เท่านั้น ไม่มี API สำหรับผู้ใช้สร้าง แก้ไข อนุมัติ ยกเลิก หรือปิดเอกสาร PO ใน Hot Pod Man
-- แยกสถานะเอกสารจาก ERP ออกจากยอดรับจริงและความคืบหน้าการรับสินค้าใน Hot Pod Man
+- Backend รับ PO และการเปลี่ยนแปลงสถานะเอกสารจาก ERP ผ่าน Webhook เท่านั้น ไม่มี API สำหรับผู้ใช้สร้าง แก้ไข อนุมัติ ยกเลิก หรือปิดเอกสาร PO ใน Hotpot Man
+- แยกสถานะเอกสารจาก ERP ออกจากยอดรับจริงและความคืบหน้าการรับสินค้าใน Hotpot Man
 - ใช้รหัสสินค้าและข้อมูลที่ Sync จาก ERP ใน PO/Receipt หากยังจับคู่สินค้าหรือหน่วยไม่ได้ให้คง PO ที่รับมาและรอ Sync สำเร็จก่อนยืนยัน Receipt ที่เกี่ยวข้อง
 - การเปลี่ยนหรือยกเลิก PO จาก ERP ต้องไม่แก้ประวัติ Receipt/Stock Movement ที่ยืนยันแล้ว หากขัดกับยอดรับจริงให้ระงับการรับเพิ่มและแสดงปัญหาเพื่อตรวจสอบ
 - ระบบแนะนำ PO ที่ยังเปิดและมี Expected Delivery Date เก่าที่สุดก่อน ผู้มีสิทธิ์เลือก PO อื่นได้โดยระบุเหตุผล
@@ -436,7 +458,7 @@ Print Status ขั้นต่ำ: Queued, Printing, Success, Failed และ 
 
 - Integration Transport หลักใช้ REST/JSON ผ่าน HTTPS และ Versioned Contract
 - Inbound PO: รับ PO, PO Line และการเปลี่ยนแปลงสถานะจาก ERP ผ่าน Webhook
-- Inbound Product: Sync ข้อมูลสินค้าและข้อมูลที่เกี่ยวข้องทั้งหมดจาก ERP ลงฐานข้อมูล Hot Pod Man ทั้งครั้งแรกและการอัปเดตภายหลัง
+- Inbound Product: Sync ข้อมูลสินค้าและข้อมูลที่เกี่ยวข้องทั้งหมดจาก ERP ลงฐานข้อมูล Hotpot Man ทั้งครั้งแรกและการอัปเดตภายหลัง
 - Outbound: Confirmed Receipt, Stock Adjustment, Return, Waste/Yield Summary และข้อมูลที่ ERP ต้องใช้
 - ห้ามใช้ Direct Write ไปยัง ERP Table; Product Sync ใช้ช่องทางที่ ERP รองรับและยืนยัน ส่วน PO ใช้ Webhook ตามขอบเขตที่กำหนด
 - จับคู่ Product และข้อมูลที่ Sync ด้วยรหัสอ้างอิงจาก ERP โดยอัตโนมัติ ไม่ให้ผู้ใช้สร้างหรือจับคู่สินค้าใหม่ทีละรายการ; รองรับ Mapping ส่วนเชื่อมต่อ Supplier, Branch, Warehouse, Tax และ Account Code
@@ -459,7 +481,7 @@ Print Status ขั้นต่ำ: Queued, Printing, Success, Failed และ 
 ### 10.2 Product Sync
 
 - รองรับการนำเข้าครั้งแรกและอัปเดตข้อมูลสินค้าที่เพิ่ม เปลี่ยนแปลง หรือปิดใช้งานจาก ERP โดยใช้ ERP เป็นแหล่งข้อมูลหลัก
-- เก็บข้อมูลสินค้าและข้อมูลที่เกี่ยวข้องทั้งหมดตาม Contract ในฐานข้อมูล Hot Pod Man เพื่อใช้กับงานคลังและรายงาน
+- เก็บข้อมูลสินค้าและข้อมูลที่เกี่ยวข้องทั้งหมดตาม Contract ในฐานข้อมูล Hotpot Man เพื่อใช้กับงานคลังและรายงาน
 - ใช้รหัสอ้างอิง ERP ที่คงที่และรุ่นข้อมูลเพื่อให้ Sync ซ้ำได้โดยไม่สร้างสินค้าซ้ำหรือให้ข้อมูลเก่าทับข้อมูลล่าสุด
 - รองรับการสั่ง Sync และ Sync ซ้ำโดยผู้มีสิทธิ์ พร้อมแสดงเวลาสำเร็จล่าสุด ผลการทำงาน และข้อผิดพลาด
 - การ Sync ล้มเหลวต้องไม่ทำให้ข้อมูลที่ยังไม่ครบถูกนำไปใช้ยืนยันรายการรับสินค้า และต้องดำเนินการต่อหรือซ้ำได้
@@ -514,12 +536,12 @@ Audit Record ต้องมี Actor, Session, Branch, Warehouse, Action, Targe
 14. Test Backup/Restore และ Integration Retry
 15. Test Scale Stable/Tare/Gross/Net, Disconnect, Reconnect และ Admin Override
 16. Test Label Print, Scan, Moisture/Cold Adhesion และ Reprint Audit
-17. Contract Test และ Reconciliation ระหว่าง Hot Pod Man กับ ERP
+17. Contract Test และ Reconciliation ระหว่าง Hotpot Man กับ ERP
 18. Performance Test ตามเกณฑ์ 2/2/10 วินาทีและ Availability/Recovery Baseline
 19. Test PO Webhook: ตรวจแหล่งที่มา รับซ้ำ รับผิดลำดับ แก้ไข/ยกเลิก PO หลังรับบางส่วน และประมวลผลซ้ำหลังเกิดข้อผิดพลาด
 20. Test Product Sync: นำเข้าครั้งแรก อัปเดต ปิดใช้งาน Sync ซ้ำ ข้อมูลไม่ครบ และ Retry โดยคงประวัติเดิม
-21. Test ERP → PO Webhook/Product Sync → Receipt โดยไม่ต้องสร้าง PO หรือตั้งค่าสินค้าซ้ำใน Hot Pod Man
-22. Test UI/API ว่าผู้ใช้ไม่สามารถสร้างหรือแก้ไข PO และข้อมูลสินค้าหลักผ่าน Hot Pod Man ได้
+21. Test ERP → PO Webhook/Product Sync → Receipt โดยไม่ต้องสร้าง PO หรือตั้งค่าสินค้าซ้ำใน Hotpot Man
+22. Test UI/API ว่าผู้ใช้ไม่สามารถสร้างหรือแก้ไข PO และข้อมูลสินค้าหลักผ่าน Hotpot Man ได้
 
 ## 14. Technical Baseline Decisions
 
@@ -536,7 +558,9 @@ Audit Record ต้องมี Actor, Session, Branch, Warehouse, Action, Targe
 | Desktop Browser | Chrome และ Edge สอง Major Version ล่าสุด |
 | Mobile Browser | iOS Safari และ Android Chrome สอง Major Version ล่าสุด |
 | Device OS | Windows 11 64-bit |
-| ERP Integration | PO ผ่าน Webhook; Product Sync ลงฐานข้อมูล Hot Pod Man; Outbound ผ่าน Adapter; ไม่มี Direct Write เข้า ERP |
+| Cloud Infrastructure | DigitalOcean: Droplet, Managed PostgreSQL, Private Spaces, VPC, Firewall, Backup, Monitoring และ Alert |
+| Environment | UAT และ Production แยก Project, Database, Bucket และ Credential |
+| ERP Integration | PO ผ่าน Webhook; Product Sync ลงฐานข้อมูล Hotpot Man; Outbound ผ่าน Adapter; ไม่มี Direct Write เข้า ERP |
 | OCR | เอกสารพิมพ์ + Manual Confirmation; ลายมือเป็นหลักฐานเท่านั้น |
 | Audit Retention | อย่างน้อย 5 ปี |
 | Backup/Recovery | RPO 15 นาที, RTO 4 ชั่วโมง และ Availability 99.5% |
@@ -553,5 +577,6 @@ Audit Record ต้องมี Actor, Session, Branch, Warehouse, Action, Targe
 - Logo และข้อความที่ต้องแสดงบน Label
 - UAT User, Approver และผู้มีอำนาจตัดสินใจ
 - ปริมาณธุรกรรมและผู้ใช้พร้อมกันโดยประมาณก่อน Production Rollout
+- บัญชี DigitalOcean ของ Hotpot Man, ผู้รับผิดชอบการชำระค่าบริการ Cloud และ Domain/DNS พร้อมสิทธิ์ให้ทีม SUNFORD ติดตั้งและดูแลทั้ง UAT/Production
 
 รุ่นเครื่องชั่ง เครื่องพิมพ์ Label, Protocol, Driver, ขนาดฉลาก วัสดุฉลาก และ Device Agent เป็นความรับผิดชอบของทีมโครงการ ไม่ใช่ External Input จากลูกค้า
