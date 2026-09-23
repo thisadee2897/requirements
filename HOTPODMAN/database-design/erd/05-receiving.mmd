@@ -1,0 +1,73 @@
+erDiagram
+    deliveryConfirmations["delivery.confirmations"] {
+        uuid id PK
+    }
+    deliveryConfirmationLines["delivery.confirmation_lines"] {
+        uuid id PK
+        uuid confirmation_id FK
+    }
+    receivingReceipts["receiving.receipts"] {
+        uuid id PK
+        uuid confirmation_id FK
+    }
+    receivingReceiptLines["receiving.receipt_lines"] {
+        uuid id PK
+        uuid receipt_id FK
+        uuid confirmation_line_id FK
+    }
+    receivingReceiptLots["receiving.receipt_lots"] {
+        uuid id PK
+        uuid receipt_line_id FK
+        uuid lot_id FK
+        uuid package_id FK
+    }
+    receivingReceiptWeighings["receiving.receipt_weighings"] {
+        uuid id PK
+        uuid receipt_line_id FK
+        uuid weighing_id FK
+    }
+    devicesWeighings["devices.weighings"] {
+        uuid id PK
+        uuid device_id FK
+    }
+    devicesDevices["devices.devices"] {
+        uuid id PK
+    }
+    inventoryLots["inventory.lots"] {
+        uuid id PK
+    }
+    inventoryPackages["inventory.packages"] {
+        uuid id PK
+        uuid lot_id FK
+        uuid parent_package_id FK
+    }
+    orgLocations["org.locations"] {
+        uuid id PK
+        uuid parent_id FK
+    }
+    devicesPrintJobs["devices.print_jobs"] {
+        uuid id PK
+        uuid printer_id FK
+        uuid package_id FK
+        uuid lot_id FK
+    }
+    devicesPrintAttempts["devices.print_attempts"] {
+        uuid id PK
+        uuid print_job_id FK
+    }
+    deliveryConfirmations ||..o{ deliveryConfirmationLines : "confirmation_id"
+    deliveryConfirmations ||..o{ receivingReceipts : "confirmation_id"
+    receivingReceipts ||..o{ receivingReceiptLines : "receipt_id"
+    deliveryConfirmationLines ||..o{ receivingReceiptLines : "confirmation_line_id"
+    receivingReceiptLines ||..o{ receivingReceiptLots : "receipt_line_id"
+    inventoryLots ||..o{ receivingReceiptLots : "lot_id"
+    inventoryPackages o|..o{ receivingReceiptLots : "package_id"
+    orgLocations ||..o{ receivingReceiptLots : "location_id"
+    receivingReceiptLines ||..o{ receivingReceiptWeighings : "receipt_line_id"
+    devicesWeighings ||..o| receivingReceiptWeighings : "weighing_id"
+    devicesDevices o|..o{ devicesWeighings : "device_id"
+    inventoryLots ||..o{ inventoryPackages : "lot_id"
+    devicesDevices ||..o{ devicesPrintJobs : "printer_id"
+    inventoryPackages o|..o{ devicesPrintJobs : "package_id"
+    inventoryLots o|..o{ devicesPrintJobs : "lot_id"
+    devicesPrintJobs ||..o{ devicesPrintAttempts : "print_job_id"

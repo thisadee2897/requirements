@@ -1,0 +1,62 @@
+erDiagram
+    platformDocuments["platform.documents"] {
+        uuid id PK
+        uuid reverses_document_id FK
+    }
+    platformDocumentLines["platform.document_lines"] {
+        uuid id PK
+        uuid document_id FK
+    }
+    platformFiles["platform.files"] {
+        uuid id PK
+    }
+    platformDocumentFiles["platform.document_files"] {
+        uuid id PK
+        uuid document_id FK
+        uuid line_id FK
+        uuid file_id FK
+    }
+    platformAuditEvents["platform.audit_events"] {
+        uuid id PK
+        uuid document_id FK
+    }
+    integrationOutboxEvents["integration.outbox_events"] {
+        uuid id PK
+    }
+    integrationInboxEvents["integration.inbox_events"] {
+        uuid id PK
+    }
+    integrationConnections["integration.connections"] {
+        uuid id PK
+    }
+    integrationDeliveries["integration.deliveries"] {
+        uuid id PK
+        uuid connection_id FK
+        uuid outbox_event_id FK
+        uuid document_id FK
+    }
+    reportingExportJobs["reporting.export_jobs"] {
+        uuid id PK
+        uuid output_file_id FK
+    }
+    notificationNotifications["notification.notifications"] {
+        uuid id PK
+        uuid outbox_event_id FK
+        uuid document_id FK
+    }
+    notificationAttempts["notification.attempts"] {
+        uuid id PK
+        uuid notification_id FK
+    }
+    platformDocuments ||..o{ platformDocumentLines : "document_id"
+    platformDocuments ||..o{ platformDocumentFiles : "document_id"
+    platformDocumentLines o|..o{ platformDocumentFiles : "line_id"
+    platformFiles ||..o{ platformDocumentFiles : "file_id"
+    platformDocuments o|..o{ platformAuditEvents : "document_id"
+    integrationConnections ||..o{ integrationDeliveries : "connection_id"
+    integrationOutboxEvents ||..o{ integrationDeliveries : "outbox_event_id"
+    platformDocuments ||..o{ integrationDeliveries : "document_id"
+    platformFiles o|..o{ reportingExportJobs : "output_file_id"
+    integrationOutboxEvents o|..o{ notificationNotifications : "outbox_event_id"
+    platformDocuments o|..o{ notificationNotifications : "document_id"
+    notificationNotifications ||..o{ notificationAttempts : "notification_id"

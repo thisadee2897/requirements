@@ -1,0 +1,71 @@
+erDiagram
+    platformDocuments["platform.documents"] {
+        uuid id PK
+        uuid reverses_document_id FK
+    }
+    platformDocumentLines["platform.document_lines"] {
+        uuid id PK
+        uuid document_id FK
+    }
+    purchasingPurchaseOrders["purchasing.purchase_orders"] {
+        uuid id PK
+        uuid document_id FK
+    }
+    purchasingPoLines["purchasing.po_lines"] {
+        uuid id PK
+        uuid document_line_id FK
+        uuid po_id FK
+    }
+    purchasingPoRevisions["purchasing.po_revisions"] {
+        uuid id PK
+        uuid po_id FK
+        uuid approval_request_id FK
+    }
+    purchasingPoRevisionLines["purchasing.po_revision_lines"] {
+        uuid id PK
+        uuid revision_id FK
+        uuid po_line_id FK
+    }
+    purchasingPoCharges["purchasing.po_charges"] {
+        uuid id PK
+        uuid revision_id FK
+    }
+    platformApprovalRequests["platform.approval_requests"] {
+        uuid id PK
+        uuid document_id FK
+    }
+    platformApprovalDecisions["platform.approval_decisions"] {
+        uuid id PK
+        uuid request_id FK
+    }
+    purchasingPoClosures["purchasing.po_closures"] {
+        uuid id PK
+        uuid po_line_id FK
+        uuid document_id FK
+        uuid reopens_id FK
+    }
+    purchasingPoDispatches["purchasing.po_dispatches"] {
+        uuid id PK
+        uuid revision_id FK
+    }
+    purchasingDeliverySchedules["purchasing.delivery_schedules"] {
+        uuid id PK
+        uuid po_line_id FK
+        uuid supersedes_id FK
+    }
+    platformDocuments ||..o{ platformDocumentLines : "document_id"
+    platformDocuments ||..o| purchasingPurchaseOrders : "document_id"
+    platformDocumentLines ||..o| purchasingPoLines : "document_line_id"
+    purchasingPurchaseOrders ||..o{ purchasingPoLines : "po_id"
+    purchasingPurchaseOrders ||..o{ purchasingPoRevisions : "po_id"
+    platformApprovalRequests o|..o{ purchasingPoRevisions : "approval_request_id"
+    purchasingPoRevisions ||..o{ purchasingPoRevisionLines : "revision_id"
+    purchasingPoLines ||..o{ purchasingPoRevisionLines : "po_line_id"
+    purchasingPoRevisions ||..o{ purchasingPoCharges : "revision_id"
+    platformDocuments ||..o{ platformApprovalRequests : "document_id"
+    platformApprovalRequests ||..o{ platformApprovalDecisions : "request_id"
+    purchasingPoLines ||..o{ purchasingPoClosures : "po_line_id"
+    platformDocuments ||..o{ purchasingPoClosures : "document_id"
+    platformApprovalRequests ||..o{ purchasingPoClosures : "approval_request_id"
+    purchasingPoRevisions ||..o{ purchasingPoDispatches : "revision_id"
+    purchasingPoLines ||..o{ purchasingDeliverySchedules : "po_line_id"

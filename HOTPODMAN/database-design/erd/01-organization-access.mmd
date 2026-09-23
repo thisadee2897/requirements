@@ -1,0 +1,70 @@
+erDiagram
+    orgCompanies["org.companies"] {
+        uuid id PK
+    }
+    orgBranches["org.branches"] {
+        uuid id PK
+        uuid company_id FK
+    }
+    orgWarehouses["org.warehouses"] {
+        uuid id PK
+        uuid company_id FK
+        uuid branch_id FK
+    }
+    securityUsers["security.users"] {
+        uuid id PK
+    }
+    securityMemberships["security.memberships"] {
+        uuid id PK
+        uuid company_id FK
+        uuid user_id FK
+    }
+    securityAccessScopes["security.access_scopes"] {
+        uuid id PK
+        uuid company_id FK
+        uuid branch_id FK
+        uuid warehouse_id FK
+    }
+    securityMembershipScopes["security.membership_scopes"] {
+        uuid id PK
+        uuid company_id FK
+        uuid membership_id FK
+        uuid scope_id FK
+    }
+    securityRoles["security.roles"] {
+        uuid id PK
+        uuid company_id FK
+    }
+    securityPermissions["security.permissions"] {
+        uuid id PK
+    }
+    securityRoleAssignments["security.role_assignments"] {
+        uuid id PK
+        uuid company_id FK
+        uuid membership_scope_id FK
+        uuid role_id FK
+    }
+    securityRolePermissions["security.role_permissions"] {
+        uuid id PK
+        uuid company_id FK
+        uuid role_id FK
+        uuid permission_id FK
+    }
+    orgCompanies ||..o{ orgBranches : "company_id"
+    orgCompanies ||..o{ orgWarehouses : "company_id"
+    orgBranches ||..o| orgWarehouses : "branch_id"
+    orgCompanies ||..o{ securityMemberships : "company_id"
+    securityUsers ||..o| securityMemberships : "user_id"
+    orgCompanies ||..o{ securityAccessScopes : "company_id"
+    orgBranches o|..o{ securityAccessScopes : "branch_id"
+    orgWarehouses o|..o{ securityAccessScopes : "warehouse_id"
+    orgCompanies ||..o{ securityMembershipScopes : "company_id"
+    securityMemberships ||..o{ securityMembershipScopes : "membership_id"
+    securityAccessScopes ||..o{ securityMembershipScopes : "scope_id"
+    orgCompanies ||..o{ securityRoles : "company_id"
+    orgCompanies ||..o{ securityRoleAssignments : "company_id"
+    securityMembershipScopes ||..o{ securityRoleAssignments : "membership_scope_id"
+    securityRoles ||..o{ securityRoleAssignments : "role_id"
+    orgCompanies ||..o{ securityRolePermissions : "company_id"
+    securityRoles ||..o{ securityRolePermissions : "role_id"
+    securityPermissions ||..o{ securityRolePermissions : "permission_id"

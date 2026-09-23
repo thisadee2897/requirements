@@ -1,0 +1,78 @@
+erDiagram
+    platformDocuments["platform.documents"] {
+        uuid id PK
+        uuid reverses_document_id FK
+    }
+    platformDocumentLines["platform.document_lines"] {
+        uuid id PK
+        uuid document_id FK
+    }
+    inventoryLots["inventory.lots"] {
+        uuid id PK
+        uuid origin_document_line_id FK
+    }
+    inventoryPackages["inventory.packages"] {
+        uuid id PK
+        uuid lot_id FK
+        uuid parent_package_id FK
+    }
+    orgLocations["org.locations"] {
+        uuid id PK
+        uuid parent_id FK
+    }
+    inventoryStockAccounts["inventory.stock_accounts"] {
+        uuid id PK
+        uuid lot_id FK
+        uuid package_id FK
+        uuid location_id FK
+    }
+    inventoryPostings["inventory.postings"] {
+        uuid id PK
+        uuid document_id FK
+        uuid reverses_posting_id FK
+    }
+    inventoryLedgerEntries["inventory.ledger_entries"] {
+        uuid id PK
+        uuid posting_id FK
+        uuid account_id FK
+        uuid document_line_id FK
+    }
+    inventoryBalances["inventory.balances"] {
+        uuid id PK
+        uuid account_id FK
+        uuid last_entry_id FK
+    }
+    inventoryReservations["inventory.reservations"] {
+        uuid id PK
+        uuid document_line_id FK
+        uuid account_id FK
+    }
+    inventoryCostLayers["inventory.cost_layers"] {
+        uuid id PK
+        uuid lot_id FK
+        uuid source_line_id FK
+    }
+    inventoryCostAllocations["inventory.cost_allocations"] {
+        uuid id PK
+        uuid layer_id FK
+        uuid ledger_entry_id FK
+    }
+    platformDocuments ||..o{ platformDocumentLines : "document_id"
+    platformDocumentLines ||..o{ inventoryLots : "origin_document_line_id"
+    inventoryLots ||..o{ inventoryPackages : "lot_id"
+    inventoryLots o|..o{ inventoryStockAccounts : "lot_id"
+    inventoryPackages o|..o{ inventoryStockAccounts : "package_id"
+    orgLocations o|..o{ inventoryStockAccounts : "location_id"
+    platformDocumentLines o|..o{ inventoryStockAccounts : "custody_document_line_id"
+    platformDocuments ||..o{ inventoryPostings : "document_id"
+    inventoryPostings ||..o{ inventoryLedgerEntries : "posting_id"
+    inventoryStockAccounts ||..o{ inventoryLedgerEntries : "account_id"
+    platformDocumentLines ||..o{ inventoryLedgerEntries : "document_line_id"
+    inventoryStockAccounts ||..o| inventoryBalances : "account_id"
+    inventoryLedgerEntries o|..o{ inventoryBalances : "last_entry_id"
+    platformDocumentLines ||..o{ inventoryReservations : "document_line_id"
+    inventoryStockAccounts ||..o{ inventoryReservations : "account_id"
+    inventoryLots ||..o{ inventoryCostLayers : "lot_id"
+    platformDocumentLines ||..o{ inventoryCostLayers : "source_line_id"
+    inventoryCostLayers ||..o{ inventoryCostAllocations : "layer_id"
+    inventoryLedgerEntries ||..o{ inventoryCostAllocations : "ledger_entry_id"

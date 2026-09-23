@@ -1,0 +1,167 @@
+[
+  {
+    "name": "10-addresses",
+    "tables": [
+      "geo.provinces",
+      "geo.districts",
+      "geo.subdistricts",
+      "geo.postal_codes",
+      "geo.subdistrict_postal_codes",
+      "org.companies",
+      "org.branches",
+      "catalog.supplier_addresses"
+    ]
+  },
+  {
+    "name": "01-organization-access",
+    "tables": [
+      "org.companies",
+      "org.branches",
+      "org.warehouses",
+      "security.users",
+      "security.memberships",
+      "security.access_scopes",
+      "security.membership_scopes",
+      "security.roles",
+      "security.permissions",
+      "security.role_assignments",
+      "security.role_permissions"
+    ]
+  },
+  {
+    "name": "02-catalog",
+    "tables": [
+      "org.branches",
+      "catalog.products",
+      "catalog.categories",
+      "catalog.units",
+      "catalog.product_units",
+      "catalog.suppliers",
+      "catalog.supplier_products",
+      "catalog.supplier_prices",
+      "catalog.branch_products",
+      "catalog.branch_supplier_products"
+    ]
+  },
+  {
+    "name": "03-purchasing",
+    "tables": [
+      "platform.documents",
+      "platform.document_lines",
+      "purchasing.purchase_orders",
+      "purchasing.po_lines",
+      "purchasing.po_revisions",
+      "purchasing.po_revision_lines",
+      "purchasing.po_charges",
+      "platform.approval_requests",
+      "platform.approval_decisions",
+      "purchasing.po_closures",
+      "purchasing.po_dispatches",
+      "purchasing.delivery_schedules"
+    ]
+  },
+  {
+    "name": "04-delivery",
+    "tables": [
+      "purchasing.purchase_orders",
+      "purchasing.po_revision_lines",
+      "delivery.confirmations",
+      "delivery.confirmation_lines",
+      "delivery.issues",
+      "delivery.acceptance_entries",
+      "delivery.issue_actions",
+      "delivery.line_progress",
+      "delivery.terminal_resolutions",
+      "receiving.receipt_lines"
+    ]
+  },
+  {
+    "name": "05-receiving",
+    "tables": [
+      "delivery.confirmations",
+      "delivery.confirmation_lines",
+      "receiving.receipts",
+      "receiving.receipt_lines",
+      "receiving.receipt_lots",
+      "receiving.receipt_weighings",
+      "devices.weighings",
+      "devices.devices",
+      "inventory.lots",
+      "inventory.packages",
+      "org.locations",
+      "devices.print_jobs",
+      "devices.print_attempts"
+    ]
+  },
+  {
+    "name": "06-ledger",
+    "tables": [
+      "platform.documents",
+      "platform.document_lines",
+      "inventory.lots",
+      "inventory.packages",
+      "org.locations",
+      "inventory.stock_accounts",
+      "inventory.postings",
+      "inventory.ledger_entries",
+      "inventory.balances",
+      "inventory.reservations",
+      "inventory.cost_layers",
+      "inventory.cost_allocations"
+    ]
+  },
+  {
+    "name": "07-operations",
+    "tables": [
+      "inventory.stock_accounts",
+      "inventory.transfers",
+      "inventory.transfer_lines",
+      "inventory.transfer_receipts",
+      "inventory.count_sessions",
+      "inventory.count_lines",
+      "inventory.adjustment_lines",
+      "withdrawal.requests",
+      "withdrawal.request_lines",
+      "withdrawal.issue_lines",
+      "withdrawal.consumptions",
+      "inventory.return_lines"
+    ]
+  },
+  {
+    "name": "08-processing-claims",
+    "tables": [
+      "withdrawal.issue_lines",
+      "processing.jobs",
+      "processing.inputs",
+      "processing.outputs",
+      "processing.input_dispositions",
+      "inventory.return_lines",
+      "inventory.waste_lines",
+      "inventory.lots",
+      "inventory.lot_genealogy",
+      "delivery.issues",
+      "receiving.variances",
+      "purchasing.claims",
+      "purchasing.claim_lines",
+      "purchasing.claim_settlements",
+      "purchasing.supplier_return_lines"
+    ]
+  },
+  {
+    "name": "09-platform",
+    "tables": [
+      "platform.documents",
+      "platform.document_lines",
+      "platform.files",
+      "platform.document_files",
+      "platform.audit_events",
+      "integration.outbox_events",
+      "integration.inbox_events",
+      "integration.connections",
+      "integration.deliveries",
+      "reporting.export_jobs",
+      "notification.notifications",
+      "notification.attempts"
+    ]
+  }
+]

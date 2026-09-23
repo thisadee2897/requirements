@@ -1,0 +1,58 @@
+erDiagram
+    orgBranches["org.branches"] {
+        uuid id PK
+    }
+    catalogProducts["catalog.products"] {
+        uuid id PK
+        uuid category_id FK
+        uuid stock_unit_id FK
+    }
+    catalogCategories["catalog.categories"] {
+        uuid id PK
+        uuid parent_id FK
+    }
+    catalogUnits["catalog.units"] {
+        uuid id PK
+    }
+    catalogProductUnits["catalog.product_units"] {
+        uuid id PK
+        uuid product_id FK
+        uuid unit_id FK
+    }
+    catalogSuppliers["catalog.suppliers"] {
+        uuid id PK
+        uuid internal_branch_id FK
+    }
+    catalogSupplierProducts["catalog.supplier_products"] {
+        uuid id PK
+        uuid supplier_id FK
+        uuid product_id FK
+        uuid product_unit_id FK
+    }
+    catalogSupplierPrices["catalog.supplier_prices"] {
+        uuid id PK
+        uuid supplier_product_id FK
+    }
+    catalogBranchProducts["catalog.branch_products"] {
+        uuid id PK
+        uuid product_id FK
+        uuid branch_id FK
+    }
+    catalogBranchSupplierProducts["catalog.branch_supplier_products"] {
+        uuid id PK
+        uuid branch_id FK
+        uuid supplier_product_id FK
+    }
+    catalogCategories o|..o{ catalogProducts : "category_id"
+    catalogUnits ||..o{ catalogProducts : "stock_unit_id"
+    catalogProducts ||..o{ catalogProductUnits : "product_id"
+    catalogUnits ||..o{ catalogProductUnits : "unit_id"
+    orgBranches o|..o{ catalogSuppliers : "internal_branch_id"
+    catalogSuppliers ||..o{ catalogSupplierProducts : "supplier_id"
+    catalogProducts ||..o{ catalogSupplierProducts : "product_id"
+    catalogProductUnits ||..o{ catalogSupplierProducts : "product_unit_id"
+    catalogSupplierProducts ||..o{ catalogSupplierPrices : "supplier_product_id"
+    catalogProducts ||..o{ catalogBranchProducts : "product_id"
+    orgBranches ||..o{ catalogBranchProducts : "branch_id"
+    orgBranches ||..o{ catalogBranchSupplierProducts : "branch_id"
+    catalogSupplierProducts ||..o{ catalogBranchSupplierProducts : "supplier_product_id"

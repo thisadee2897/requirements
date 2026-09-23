@@ -1,0 +1,61 @@
+erDiagram
+    geoProvinces["geo.provinces"] {
+        uuid id PK
+    }
+    geoDistricts["geo.districts"] {
+        uuid id PK
+        uuid province_id FK
+    }
+    geoSubdistricts["geo.subdistricts"] {
+        uuid id PK
+        uuid district_id FK
+    }
+    geoPostalCodes["geo.postal_codes"] {
+        uuid id PK
+    }
+    geoSubdistrictPostalCodes["geo.subdistrict_postal_codes"] {
+        uuid id PK
+        uuid subdistrict_id FK
+        uuid postal_code_id FK
+    }
+    orgCompanies["org.companies"] {
+        uuid id PK
+        uuid province_id FK
+        uuid district_id FK
+        uuid subdistrict_id FK
+        uuid postal_code_id FK
+    }
+    orgBranches["org.branches"] {
+        uuid id PK
+        uuid company_id FK
+        uuid province_id FK
+        uuid district_id FK
+        uuid subdistrict_id FK
+        uuid postal_code_id FK
+    }
+    catalogSupplierAddresses["catalog.supplier_addresses"] {
+        uuid id PK
+        uuid company_id FK
+        uuid province_id FK
+        uuid district_id FK
+        uuid subdistrict_id FK
+        uuid postal_code_id FK
+    }
+    geoProvinces ||..o{ geoDistricts : "province_id"
+    geoDistricts ||..o{ geoSubdistricts : "district_id"
+    geoSubdistricts ||..o{ geoSubdistrictPostalCodes : "subdistrict_id"
+    geoPostalCodes ||..o{ geoSubdistrictPostalCodes : "postal_code_id"
+    geoProvinces ||..o{ orgCompanies : "province_id"
+    geoDistricts ||..o{ orgCompanies : "district_id"
+    geoSubdistricts ||..o{ orgCompanies : "subdistrict_id"
+    geoPostalCodes ||..o{ orgCompanies : "postal_code_id"
+    orgCompanies ||..o{ orgBranches : "company_id"
+    geoProvinces ||..o{ orgBranches : "province_id"
+    geoDistricts ||..o{ orgBranches : "district_id"
+    geoSubdistricts ||..o{ orgBranches : "subdistrict_id"
+    geoPostalCodes ||..o{ orgBranches : "postal_code_id"
+    orgCompanies ||..o{ catalogSupplierAddresses : "company_id"
+    geoProvinces ||..o{ catalogSupplierAddresses : "province_id"
+    geoDistricts ||..o{ catalogSupplierAddresses : "district_id"
+    geoSubdistricts ||..o{ catalogSupplierAddresses : "subdistrict_id"
+    geoPostalCodes ||..o{ catalogSupplierAddresses : "postal_code_id"

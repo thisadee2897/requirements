@@ -1,0 +1,79 @@
+erDiagram
+    withdrawalIssueLines["withdrawal.issue_lines"] {
+        uuid id PK
+    }
+    processingJobs["processing.jobs"] {
+        uuid id PK
+    }
+    processingInputs["processing.inputs"] {
+        uuid id PK
+        uuid job_id FK
+        uuid issue_line_id FK
+    }
+    processingOutputs["processing.outputs"] {
+        uuid id PK
+        uuid job_id FK
+        uuid lot_id FK
+    }
+    processingInputDispositions["processing.input_dispositions"] {
+        uuid id PK
+        uuid input_id FK
+        uuid output_id FK
+        uuid return_line_id FK
+    }
+    inventoryReturnLines["inventory.return_lines"] {
+        uuid id PK
+        uuid issue_line_id FK
+    }
+    inventoryWasteLines["inventory.waste_lines"] {
+        uuid id PK
+        uuid process_input_id FK
+    }
+    inventoryLots["inventory.lots"] {
+        uuid id PK
+    }
+    inventoryLotGenealogy["inventory.lot_genealogy"] {
+        uuid id PK
+        uuid parent_lot_id FK
+        uuid child_lot_id FK
+    }
+    deliveryIssues["delivery.issues"] {
+        uuid id PK
+    }
+    receivingVariances["receiving.variances"] {
+        uuid id PK
+    }
+    purchasingClaims["purchasing.claims"] {
+        uuid id PK
+    }
+    purchasingClaimLines["purchasing.claim_lines"] {
+        uuid id PK
+        uuid claim_id FK
+        uuid delivery_issue_id FK
+        uuid receipt_variance_id FK
+    }
+    purchasingClaimSettlements["purchasing.claim_settlements"] {
+        uuid id PK
+        uuid claim_line_id FK
+    }
+    purchasingSupplierReturnLines["purchasing.supplier_return_lines"] {
+        uuid id PK
+        uuid claim_line_id FK
+    }
+    processingJobs ||..o{ processingInputs : "job_id"
+    withdrawalIssueLines ||..o{ processingInputs : "issue_line_id"
+    processingJobs ||..o{ processingOutputs : "job_id"
+    inventoryLots ||..o{ processingOutputs : "lot_id"
+    processingInputs ||..o{ processingInputDispositions : "input_id"
+    processingOutputs o|..o{ processingInputDispositions : "output_id"
+    inventoryReturnLines o|..o{ processingInputDispositions : "return_line_id"
+    inventoryWasteLines o|..o{ processingInputDispositions : "waste_line_id"
+    withdrawalIssueLines ||..o{ inventoryReturnLines : "issue_line_id"
+    processingInputs o|..o{ inventoryWasteLines : "process_input_id"
+    inventoryLots ||..o{ inventoryLotGenealogy : "parent_lot_id"
+    inventoryLots ||..o{ inventoryLotGenealogy : "child_lot_id"
+    purchasingClaims ||..o{ purchasingClaimLines : "claim_id"
+    deliveryIssues o|..o{ purchasingClaimLines : "delivery_issue_id"
+    receivingVariances o|..o{ purchasingClaimLines : "receipt_variance_id"
+    purchasingClaimLines ||..o{ purchasingClaimSettlements : "claim_line_id"
+    purchasingClaimLines ||..o{ purchasingSupplierReturnLines : "claim_line_id"

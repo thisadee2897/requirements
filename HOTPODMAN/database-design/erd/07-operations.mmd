@@ -1,0 +1,71 @@
+erDiagram
+    inventoryStockAccounts["inventory.stock_accounts"] {
+        uuid id PK
+    }
+    inventoryTransfers["inventory.transfers"] {
+        uuid id PK
+    }
+    inventoryTransferLines["inventory.transfer_lines"] {
+        uuid id PK
+        uuid transfer_id FK
+        uuid from_account_id FK
+        uuid transit_account_id FK
+    }
+    inventoryTransferReceipts["inventory.transfer_receipts"] {
+        uuid id PK
+        uuid transfer_line_id FK
+        uuid to_account_id FK
+    }
+    inventoryCountSessions["inventory.count_sessions"] {
+        uuid id PK
+    }
+    inventoryCountLines["inventory.count_lines"] {
+        uuid id PK
+        uuid session_id FK
+        uuid account_id FK
+    }
+    inventoryAdjustmentLines["inventory.adjustment_lines"] {
+        uuid id PK
+        uuid account_id FK
+        uuid count_line_id FK
+    }
+    withdrawalRequests["withdrawal.requests"] {
+        uuid id PK
+    }
+    withdrawalRequestLines["withdrawal.request_lines"] {
+        uuid id PK
+        uuid request_id FK
+    }
+    withdrawalIssueLines["withdrawal.issue_lines"] {
+        uuid id PK
+        uuid request_line_id FK
+        uuid source_account_id FK
+        uuid custody_account_id FK
+    }
+    withdrawalConsumptions["withdrawal.consumptions"] {
+        uuid id PK
+        uuid issue_line_id FK
+    }
+    inventoryReturnLines["inventory.return_lines"] {
+        uuid id PK
+        uuid issue_line_id FK
+        uuid from_account_id FK
+        uuid to_account_id FK
+    }
+    inventoryTransfers ||..o{ inventoryTransferLines : "transfer_id"
+    inventoryStockAccounts ||..o{ inventoryTransferLines : "from_account_id"
+    inventoryStockAccounts ||..o{ inventoryTransferLines : "transit_account_id"
+    inventoryTransferLines ||..o{ inventoryTransferReceipts : "transfer_line_id"
+    inventoryStockAccounts ||..o{ inventoryTransferReceipts : "to_account_id"
+    inventoryCountSessions ||..o{ inventoryCountLines : "session_id"
+    inventoryStockAccounts ||..o{ inventoryCountLines : "account_id"
+    inventoryStockAccounts ||..o{ inventoryAdjustmentLines : "account_id"
+    inventoryCountLines o|..o| inventoryAdjustmentLines : "count_line_id"
+    withdrawalRequests ||..o{ withdrawalRequestLines : "request_id"
+    withdrawalRequestLines ||..o{ withdrawalIssueLines : "request_line_id"
+    inventoryStockAccounts ||..o{ withdrawalIssueLines : "source_account_id"
+    inventoryStockAccounts ||..o{ withdrawalIssueLines : "custody_account_id"
+    withdrawalIssueLines ||..o{ withdrawalConsumptions : "issue_line_id"
+    withdrawalIssueLines ||..o{ inventoryReturnLines : "issue_line_id"
+    inventoryStockAccounts ||..o{ inventoryReturnLines : "from_account_id"
+    inventoryStockAccounts ||..o{ inventoryReturnLines : "to_account_id"

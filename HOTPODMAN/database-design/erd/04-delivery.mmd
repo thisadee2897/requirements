@@ -1,0 +1,55 @@
+erDiagram
+    purchasingPurchaseOrders["purchasing.purchase_orders"] {
+        uuid id PK
+    }
+    purchasingPoRevisionLines["purchasing.po_revision_lines"] {
+        uuid id PK
+    }
+    deliveryConfirmations["delivery.confirmations"] {
+        uuid id PK
+        uuid po_id FK
+    }
+    deliveryConfirmationLines["delivery.confirmation_lines"] {
+        uuid id PK
+        uuid confirmation_id FK
+        uuid po_revision_line_id FK
+    }
+    deliveryIssues["delivery.issues"] {
+        uuid id PK
+        uuid confirmation_line_id FK
+    }
+    deliveryAcceptanceEntries["delivery.acceptance_entries"] {
+        uuid id PK
+        uuid confirmation_line_id FK
+        uuid issue_id FK
+        uuid reverses_id FK
+    }
+    deliveryIssueActions["delivery.issue_actions"] {
+        uuid id PK
+        uuid issue_id FK
+        uuid acceptance_entry_id FK
+    }
+    deliveryLineProgress["delivery.line_progress"] {
+        uuid id PK
+        uuid confirmation_line_id FK
+    }
+    deliveryTerminalResolutions["delivery.terminal_resolutions"] {
+        uuid id PK
+        uuid confirmation_line_id FK
+        uuid reverses_id FK
+    }
+    receivingReceiptLines["receiving.receipt_lines"] {
+        uuid id PK
+        uuid confirmation_line_id FK
+    }
+    purchasingPurchaseOrders ||..o{ deliveryConfirmations : "po_id"
+    deliveryConfirmations ||..o{ deliveryConfirmationLines : "confirmation_id"
+    purchasingPoRevisionLines ||..o{ deliveryConfirmationLines : "po_revision_line_id"
+    deliveryConfirmationLines ||..o{ deliveryIssues : "confirmation_line_id"
+    deliveryConfirmationLines ||..o{ deliveryAcceptanceEntries : "confirmation_line_id"
+    deliveryIssues o|..o{ deliveryAcceptanceEntries : "issue_id"
+    deliveryIssues ||..o{ deliveryIssueActions : "issue_id"
+    deliveryAcceptanceEntries o|..o{ deliveryIssueActions : "acceptance_entry_id"
+    deliveryConfirmationLines ||..o| deliveryLineProgress : "confirmation_line_id"
+    deliveryConfirmationLines ||..o{ deliveryTerminalResolutions : "confirmation_line_id"
+    deliveryConfirmationLines ||..o{ receivingReceiptLines : "confirmation_line_id"
