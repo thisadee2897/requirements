@@ -4,3 +4,6 @@
 
 # Local editor history
 .history/
+
+# Temporary document builds and previews
+/tmp/
